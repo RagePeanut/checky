@@ -1,0 +1,30 @@
+{
+  "name": "checky",
+  "version": "0.0.1",
+  "description": "A bot that checks if mentioned Steem users exist.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "bot",
+    "steem",
+    "steemit",
+    "mention",
+    "checker"
+  ],
+  "author": "RagePeanut",
+  "license": "MIT",
+  "dependencies": {
+    "steem": "^0.7.1"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RagePeanut/checky.git"
+  },
+  "bugs": {
+    "url": "https://github.com/RagePeanut/checky/issues"
+  },
+  "homepage": "https://github.com/RagePeanut/checky#readme"
+}
