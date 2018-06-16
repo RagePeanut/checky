@@ -15,8 +15,8 @@ function stream() {
             if(operation && operation[0] === 'comment' && operation[1].parent_author === '') {
                 try {
                     const metadata = JSON.parse(operation[1].json_metadata);
-                    // Removing the dots at the end of some mentions (happens with Busy)
-                    let mentions = metadata.users.map(user => user.replace(/\.+$/, ''))
+                    // Removing the dots, commas and dashes at the end of some mentions (happens with Busy)
+                    let mentions = metadata.users.map(user => user.replace(/[.,-]+$/, ''))
                     // Removing website names, empty names and letter names (for example with 'hola amig@s', '@s' would be added as a mention by some apps)
                                                  .filter(user => (user.length < 5 && user.length > 1 && user !== '') || !/\.[a-z]{2,3}$/.test(user))
                     // Lower casing the characters
