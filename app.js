@@ -16,7 +16,7 @@ function stream() {
                 try {
                     const metadata = JSON.parse(operation[1].json_metadata);
                     // Removing the punctuation at the end of some mentions and lower casing mentions
-                    let mentions = metadata.users.map(user => user.replace(/[.,;:-]+$/, '').toLowerCase());
+                    let mentions = metadata.users.map(user => user.replace(/[?¿!¡.,;:-]+$/, '').toLowerCase());
                     // Removing duplicates
                     mentions = _.uniq(mentions);
                     processCreatedPost(mentions, operation[1].body, operation[1].author, operation[1].permlink);
@@ -58,12 +58,12 @@ function processMentions(mentions, body, author, permlink) {
             }
             if(wrongMentions.length > 0) {
                 console.log(wrongMentions, author, permlink);
-                const regex = new RegExp('(?:^|[\\s\\S]{0,299}[^\w/])(?:' + wrongMentions.join('|') + ')(?:[^\w/][\\s\\S]{0,299}|$)', 'gi');
+                const regex = new RegExp('(?:^|[\\s\\S]{0,299}[^\\w/-])(?:' + wrongMentions.map(mention => _.escapeRegExp(mention)).join('|') + ')(?:[^\\w/-][\\s\\S]{0,299}|$)', 'gi');
                 const matches = body.match(regex)
                 if(matches) {
                     let socialNetworkRelated;
                     matches.forEach(part => {
-                        socialNetworkRelated = socialNetworkRelated || /(insta|tele)gram|tw(itter|eet)|medium|텔레그램/i.test(part);
+                        socialNetworkRelated = socialNetworkRelated || /(insta|tele)gram|tw(itter|eet)|medium|brunch|텔레그램/i.test(part);
                     });
                     if(!socialNetworkRelated) {
                         sendMessage(wrongMentions);
