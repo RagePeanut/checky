@@ -10,17 +10,13 @@ stream();
 function stream() {
     new Promise((resolve, reject) => {
         steemStream.api.setOptions({ url: stream_nodes[0] })
-        steemStream.api.streamOperations('irreversible', (error, operation) => {
+        steemStream.api.streamOperations((error, operation) => {
             if(error) return reject(error);
             if(operation && operation[0] === 'comment' && operation[1].parent_author === '') {
                 try {
                     const metadata = JSON.parse(operation[1].json_metadata);
-                    // Removing the dots, commas and dashes at the end of some mentions (happens with Busy)
-                    let mentions = metadata.users.map(user => user.replace(/[.,-]+$/, ''))
-                    // Removing website names, empty names and letter names (for example with 'hola amig@s', '@s' would be added as a mention by some apps)
-                                                 .filter(user => (user.length < 5 && user.length > 1 && user !== '') || !/\.[a-z]{2,3}$/.test(user))
-                    // Lower casing the characters
-                                                 .map(user => user.toLowerCase());
+                    // Removing the punctuation at the end of some mentions and lower casing mentions
+                    let mentions = metadata.users.map(user => user.replace(/[.,;:-]+$/, '').toLowerCase());
                     // Removing duplicates
                     mentions = _.uniq(mentions);
                     processCreatedPost(mentions, operation[1].body, operation[1].author, operation[1].permlink);
@@ -61,16 +57,16 @@ function processMentions(mentions, body, author, permlink) {
                 if(res[i] === null) wrongMentions.push('@' + mentions[i]);
             }
             if(wrongMentions.length > 0) {
-                const regex = new RegExp('(?:^|[\\s\\S]{0,299}[^\\/])(?:' + wrongMentions.join('|') + ')(?:[^\\/][\\s\\S]{0,299}|$)', 'g');
+                console.log(wrongMentions, author, permlink);
+                const regex = new RegExp('(?:^|[\\s\\S]{0,299}[^\w/])(?:' + wrongMentions.join('|') + ')(?:[^\w/][\\s\\S]{0,299}|$)', 'gi');
                 const matches = body.match(regex)
                 if(matches) {
                     let socialNetworkRelated;
                     matches.forEach(part => {
-                        socialNetworkRelated = socialNetworkRelated || /instagram|tw(itter|eet)|medium/i.test(part);
+                        socialNetworkRelated = socialNetworkRelated || /(insta|tele)gram|tw(itter|eet)|medium|텔레그램/i.test(part);
                     });
                     if(!socialNetworkRelated) {
                         sendMessage(wrongMentions);
-                        console.log(wrongMentions, author, permlink);
                     }
                 }
             }
