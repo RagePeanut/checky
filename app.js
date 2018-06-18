@@ -35,7 +35,7 @@ function processCreatedPost(mentions, body, author, permlink) {
     new Promise((resolve, reject) => {
         steemRequest.api.getContent(author, permlink, (err, res) => {
             if(err) return reject(err);
-            if(res.last_update === res.created) processMentions(mentions, body, author, permlink);
+            if(res.last_update === res.created) processMentions(mentions, body, author, permlink, res.title);
         });
     }).catch(error => {
         console.error(`Request error (getContent): ${ error.message } with ${ request_nodes[0] }`);
@@ -47,7 +47,7 @@ function processCreatedPost(mentions, body, author, permlink) {
     });
 }
 
-function processMentions(mentions, body, author, permlink) {
+function processMentions(mentions, body, author, permlink, title) {
     new Promise((resolve, reject) => {
         steemRequest.api.lookupAccountNames(mentions, (err, res) => {
             if(err) return reject(err);
@@ -61,7 +61,7 @@ function processMentions(mentions, body, author, permlink) {
                 }
             }
             if(wrongMentions.length > 0) {
-                sendMessage(wrongMentions);
+                sendMessage(wrongMentions, author, permlink, title);
             }
             console.log(wrongMentions, author);
         });
@@ -75,15 +75,26 @@ function processMentions(mentions, body, author, permlink) {
     });
 }
 
-function sendMessage(wrongMentions) {
-    let message;
+function sendMessage(wrongMentions, author, permlink, title) {
+    let message = `Hi @${ author },`;
     if(wrongMentions.length > 1) {
         wrongMentions = wrongMentions.map(mention => mention + ',');
         wrongMentions[wrongMentions.length-1] = wrongMentions[wrongMentions.length-1].replace(',', '');
         wrongMentions[wrongMentions.length-2] = wrongMentions[wrongMentions.length-2].replace(',', ' and');
-        message = `Hi, while checking the users mentioned in this post I noticed that ${ wrongMentions.join(' ') } don't exist on Steem. Maybe you made some typos ?`
+        message = message + ` while checking the users mentioned in this post I noticed that ${ wrongMentions.join(' ') } don't exist on Steem. Maybe you made some typos ?`
     } else {
-        message = `Hi, the account ${ wrongMentions[0] } mentioned in this post doesn't seem to exist on Steem. Maybe you made a typo ?`;
+        message = message + ` the account ${ wrongMentions[0] } mentioned in this post doesn't seem to exist on Steem. Maybe you made a typo ?`;
     }
-    console.log(message);
+    const metadata = {
+        app: 'checky/0.0.1',
+        format: 'markdown',
+        tags: [ 
+            'mentions',
+            'bot'
+        ],
+        users: [ author ]
+    } 
+    steemRequest.broadcast.comment(posting_key, author, permlink, 'checky', 're-' + permlink + Math.random().toString(36).slice(2), 'Possible wrong mentions found on "' + title + '"', message, JSON.stringify(metadata), function(err, result) {
+        console.log(err, result);
+    });
 }
