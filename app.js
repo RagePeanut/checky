@@ -1,7 +1,7 @@
 const _ = require('lodash');
 const steemStream = require('steem');
 const steemRequest = require('steem');
-const { request_nodes, stream_nodes } = require('./config');
+const { posting_key, request_nodes, stream_nodes } = require('./config');
 
 steemRequest.api.setOptions({ url: request_nodes[0] });
 
@@ -54,22 +54,16 @@ function processMentions(mentions, body, author, permlink) {
             const wrongMentions = [];
             // Add each username that got a null result from the API (meaning the user doesn't exist) to the wrongMentions array
             for(let i = 0; i < mentions.length; i++) {
-                if(res[i] === null) wrongMentions.push('@' + mentions[i]);
-            }
-            if(wrongMentions.length > 0) {
-                console.log(wrongMentions, author, permlink);
-                const regex = new RegExp('(?:^|[\\s\\S]{0,299}[^\\w/-])(?:' + wrongMentions.map(mention => _.escapeRegExp(mention)).join('|') + ')(?:[^\\w/-][\\s\\S]{0,299}|$)', 'gi');
-                const matches = body.match(regex)
-                if(matches) {
-                    let socialNetworkRelated;
-                    matches.forEach(part => {
-                        socialNetworkRelated = socialNetworkRelated || /(insta|tele)gram|tw(itter|eet)|medium|brunch|텔레그램/i.test(part);
-                    });
-                    if(!socialNetworkRelated) {
-                        sendMessage(wrongMentions);
-                    }
+                if(res[i] === null) {
+                    const regex = new RegExp('(?:^|[\\s\\S]{0,299}[^\\w/-])@' + _.escapeRegExp(mentions[i]) + '(?:[^\\w/-][\\s\\S]{0,299}|$)', 'gi');
+                    const match = body.match(regex);
+                    if(match && !/(insta|tele)gram|tw(itter|eet)|medium|brunch|텔레그램/i.test(match)) wrongMentions.push('@' + mentions[i]);
                 }
             }
+            if(wrongMentions.length > 0) {
+                sendMessage(wrongMentions);
+            }
+            console.log(wrongMentions, author);
         });
     }).catch(error => {
         console.error(`Request error (lookupAccountNames): ${ error.message } with ${ request_nodes[0] }`);
