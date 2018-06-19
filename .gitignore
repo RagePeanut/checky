@@ -1,3 +1,9 @@
+# Automatic data folder
+data/
+
+# Nodemon
+nodemon.json
+
 # Logs
 logs
 *.log
