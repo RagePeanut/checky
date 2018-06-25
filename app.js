@@ -7,7 +7,7 @@ const { posting_key, request_nodes, stream_nodes } = require('./config');
 steemRequest.api.setOptions({ url: request_nodes[0] });
 
 let users = {};
-if(fs.existsSync('data') && fs.existsSync('data/users.json')) users = require('data/users');
+if(fs.existsSync('data') && fs.existsSync('data/users.json')) users = require('./data/users');
 else fs.mkdirSync('data');
 
 setInterval(() => 
@@ -19,30 +19,45 @@ setInterval(() =>
 stream();
 
 function stream() {
+    steemStream.api.setOptions({ url: stream_nodes[0] });
     new Promise((resolve, reject) => {
-        steemStream.api.setOptions({ url: stream_nodes[0] })
-        steemStream.api.streamOperations((error, operation) => {
-            if(error) return reject(error);
-
-            const author = operation[1].author;
-            const parent_author = operation[1].parent_author;
-            const body = operation[1].body;
-            const permlink = operation[1].permlink;
-
-            if(operation && operation[0] === 'comment') {
-                if(parent_author === 'checky') {
-                    const command = /[!/]([A-Za-z]+)(?:\s+(.+))?/.exec(body);
-                    if(command[1]) processCommand(command, author, permlink);
-                } else if(parent_author === '' && users[author].mode !== 'off' || users[author] && users[author].mode === 'advanced') {
-                    try {
-                        const metadata = JSON.parse(operation[1].json_metadata);
-                        // Removing the punctuation at the end of some mentions, lower casing mentions, removing duplicates and already encountered existing users
-                        let mentions = _.uniq(metadata.users.map(user => user.replace(/[?¿!¡.,;:-]+$/, '').toLowerCase())).filter(user => !users[user]);
-                        // Removing ignored mentions
-                        if(users[author]) mentions = mentions.filter(mention => !users[author].ignored.includes(mention));
-                        else users[author] = { mode: 'regular', ignored: [] };
-                        if(mentions.length > 0) processCreatedPost(mentions, body, author, permlink);
-                    } catch(err) {}
+        steemStream.api.streamOperations((err, operation) => {
+            if(err) return reject(err);
+            if(operation) {
+                switch(operation[0]) {
+                    case 'comment':
+                        const author = operation[1].author;
+                        const parent_author = operation[1].parent_author;
+                        const body = operation[1].body;
+                        const permlink = operation[1].permlink;
+    
+                        if(parent_author !== '') addUsers(author, parent_author);
+                        else addUsers(author);
+    
+                        if(parent_author === 'checky') {
+                            const command = /[!/]([A-Za-z]+)(?:\s+(.+))?/.exec(body);
+                            if(command[1]) processCommand(command, author, permlink);
+                        } else if(parent_author === '' && users[author].mode !== 'off' || users[author].mode === 'advanced') {
+                            try {
+                                const metadata = JSON.parse(operation[1].json_metadata);
+                                // Removing the punctuation at the end of some mentions, lower casing mentions, removing duplicates and already encountered existing users
+                                let mentions = _.uniq(metadata.users.map(user => user.replace(/[?¿!¡.,;:-]+$/, '').toLowerCase())).filter(user => !users[user]);
+                                // Removing ignored mentions
+                                if(users[author].ignored.length > 0) mentions = mentions.filter(mention => !users[author].ignored.includes(mention));
+                                if(mentions.length > 0) processCreatedPost(mentions, body, author, permlink);
+                            } catch(err) {}
+                        }
+                        break;
+                    case 'vote':
+                        addUsers(operation[1].voter, operation[1].author);
+                        break;
+                    case 'transfer':
+                    case 'transfer_to_vesting':
+                        addUsers(operation[1].from, operation[1].to);
+                        break;
+                    case 'claim_reward_balance':
+                        addUsers(operation[1].account);
+                        break;
                 }
             }
         });
@@ -55,25 +70,28 @@ function stream() {
 }
 
 function processCreatedPost(mentions, body, author, permlink) {
-    new Promise((resolve, reject) => {
-        steemRequest.api.getContent(author, permlink, (err, res) => {
-            if(err) return reject(err);
-            if(res.last_update === res.created) processMentions(mentions, body, author, permlink, res.title);
-        });
-    }).catch(error => {
-        console.error(`Request error (getContent): ${ error.message } with ${ request_nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        request_nodes.push(request_nodes.shift());
-        steemRequest.api.setOptions({ url: request_nodes[0] });
-        console.log(`Retrying with ${ request_nodes[0] }`)
-        processCreatedPost(mentions, body, author, permlink);
+    steemRequest.api.getContent(author, permlink, (err, res) => {
+        if(err) {
+            console.error(`Request error (getContent): ${ err.message } with ${ request_nodes[0] }`);
+            // Putting the node where the error comes from at the end of the array
+            request_nodes.push(request_nodes.shift());
+            steemRequest.api.setOptions({ url: request_nodes[0] });
+            console.log(`Retrying with ${ request_nodes[0] }`)
+            processCreatedPost(mentions, body, author, permlink);
+        } else if(res.last_update === res.created) processMentions(mentions, body, author, permlink, res.title);
     });
 }
 
 function processMentions(mentions, body, author, permlink, title) {
-    new Promise((resolve, reject) => {
-        steemRequest.api.lookupAccountNames(mentions, (err, res) => {
-            if(err) return reject(err);
+    steemRequest.api.lookupAccountNames(mentions, (err, res) => {
+        if(err) {
+            console.error(`Request error (lookupAccountNames): ${ err.message } with ${ request_nodes[0] }`);
+            // Putting the node where the error comes from at the end of the array
+            request_nodes.push(request_nodes.shift());
+            steemRequest.api.setOptions({ url: request_nodes[0] });
+            console.log(`Retrying with ${ request_nodes[0] }`)
+            processMentions(mentions, body, author, permlink);
+        } else {
             let wrongMentions = [];
             // Add each username that got a null result from the API (meaning the user doesn't exist) to the wrongMentions array
             for(let i = 0; i < mentions.length; i++) {
@@ -95,15 +113,7 @@ function processMentions(mentions, body, author, permlink, title) {
                 }
                 sendMessage(message, author, permlink, 'Possible wrong mentions found on ' + title);
             }
-            console.log(wrongMentions, author);
-        });
-    }).catch(error => {
-        console.error(`Request error (lookupAccountNames): ${ error.message } with ${ request_nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        request_nodes.push(request_nodes.shift());
-        steemRequest.api.setOptions({ url: request_nodes[0] });
-        console.log(`Retrying with ${ request_nodes[0] }`)
-        processMentions(mentions, body, author, permlink);
+        }
     });
 }
 
@@ -159,10 +169,15 @@ function sendMessage(message, author, permlink, title) {
             'mentions',
             'bot',
             'checky'
-        ],
-        users: [ author ]
+        ]
     }
     steemRequest.broadcast.comment(posting_key, author, permlink, 'checky', 're-' + permlink, title, message, JSON.stringify(metadata), function(err) {
         console.log(err);
+    });
+}
+
+function addUsers(...encounteredUsers) {
+    encounteredUsers.forEach(user => {
+        if(!users[user]) users[user] = { mode: 'regular', ignored: [] };
     });
 }
