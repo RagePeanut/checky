@@ -6,10 +6,12 @@ const { posting_key, request_nodes, stream_nodes } = require('./config');
 
 steemRequest.api.setOptions({ url: request_nodes[0] });
 
+// Creating a users object and updating it with the content of ./data/users.json if the file exists 
 let users = {};
 if(fs.existsSync('data') && fs.existsSync('data/users.json')) users = require('./data/users');
 else fs.mkdirSync('data');
 
+// Updating the ./data/users.json file with the content of the users object every 5 seconds
 setInterval(() => 
     fs.writeFile('data/users.json', JSON.stringify(users), err => {
         if(err) console.log(err);
@@ -37,6 +39,7 @@ function stream() {
                         addUsers(author, parentAuthor);
     
                         if(parentAuthor === 'checky') {
+                            // Parsing the command from the comment
                             const command = /[!/]([A-Za-z]+)(?:\s+(.+))?/.exec(body);
                             if(command[1]) processCommand(command, author, permlink);
                         } else if(parentAuthor === '' && users[author].mode !== 'off' || users[author].mode === 'advanced') {
@@ -52,7 +55,7 @@ function stream() {
                         break;
                     case 'vote':
                         addUsers(operation[1].voter, operation[1].author);
-                        // Setting the mode to off for the user if it has flagged the bot's comment
+                        // Setting the user mode to off if he has flagged the bot's comment
                         if(operation[1].author === 'checky' && operation[1].weight < 0) users[voter].mode = 'off';
                         break;
                     case 'transfer':
@@ -115,21 +118,21 @@ function processMentions(mentions, body, author, permlink, title) {
             // Add each username that got a null result from the API (meaning the user doesn't exist) to the wrongMentions array
             for(let i = 0; i < mentions.length; i++) {
                 if(res[i] === null) {
+                    // Add the username to the wrongMentions array only if it doesn't contain a social network reference in the ~600 characters surrounding it
                     const regex = new RegExp('(?:^|[\\s\\S]{0,299}[^\\w/-])@' + _.escapeRegExp(mentions[i]) + '(?:[^\\w/-][\\s\\S]{0,299}|$)', 'gi');
                     const match = body.match(regex);
                     if(match && !/(insta|tele)gram|tw(itter|eet)|medium|brunch|텔레그램/i.test(match)) wrongMentions.push('@' + mentions[i]);
-                } else users[mentions[i]] = { mode: 'regular', ignored: [] };
+                } else addUsers(mentions[i]);
             }
+            // Send a message if any wrong mention has been found in the post/comment
             if(wrongMentions.length > 0) {
-                let message = `Hi @${ author },`;
+                let message = `Hi @${ author }, I'm @checky ! While checking the mentions made in this post I found out that `;
                 if(wrongMentions.length > 1) {
                     wrongMentions = wrongMentions.map(mention => mention + ',');
                     wrongMentions[wrongMentions.length-1] = wrongMentions[wrongMentions.length-1].replace(',', '');
                     wrongMentions[wrongMentions.length-2] = wrongMentions[wrongMentions.length-2].replace(',', ' and');
-                    message = message + ` while checking the users mentioned in this post I noticed that ${ wrongMentions.join(' ') } don't exist on Steem. Maybe you made some typos ?`
-                } else {
-                    message = message + ` the account ${ wrongMentions[0] } mentioned in this post doesn't seem to exist on Steem. Maybe you made a typo ?`;
-                }
+                    message += `${ wrongMentions.join(' ') } don't seem to exist on Steem. Maybe you made some typos ?`;
+                } else message += `${ wrongMentions[0] } doesn't seem to exist on Steem. Maybe you made a typo ?`;
                 sendMessage(message, author, permlink, 'Possible wrong mentions found on ' + title);
             }
         }
@@ -161,6 +164,7 @@ function processCommand(command, author, permlink) {
         case 'mode':
         case 'switch':
             if(command[2]) {
+                // Removing white spaces arround the parameter
                 const mode = _.trim(command[2]);
                 switch(mode) {
                     case 'on':
@@ -172,15 +176,32 @@ function processCommand(command, author, permlink) {
                     case 'advanced':
                     case 'plus':
                         users[author].mode = 'advanced';
-                        sendMessage('Your account mode has been set to advanced. You will now get your mentions checked for posts and comments.');
+                        sendMessage('Your account mode has been set to advanced. You will now get your mentions checked for posts and comments you make.');
                         break;
                     case 'off':
                         users[author].mode = 'off';
-                        sendMessage('Your account mode has been set to off. You will now get no mentions checked whatsoever.');
+                        sendMessage('Your account mode has been set to off. None of your mentions will be checked whatsoever.');
+                        break;
                     default:
-                        sendMessage(`The ${ mode } mode doesn't exist. Your account is currently set to ${ users[account].mode }. To switch it to regular, advanced or off, please write "!mode regular/advanced/off".`, author, permlink, 'Wrong mode specified');
+                        sendMessage(`The ${ mode } mode doesn't exist. Your account is currently set to ${ users[account].mode }. To switch it to regular, advanced or off, please write \`!mode [regular-advanced-off]\`.`, author, permlink, 'Wrong mode specified');
                 }
-            } else sendMessage('You didn\'t spectify any mode to switch to. Please try again by using "!mode regular", "!mode advanced" or "!mode off".', author, permlink, 'No mode specified');
+            } else sendMessage(`You didn't spectify any mode to switch to. Please try again by using \`!${ command[1] } regular\`, \`!${ command[1] } advanced\` or \`!${ command[1] } off\`.`, author, permlink, 'No mode specified');
+            break;
+        case 'state':
+            sendMessage(`Your account is currently set to ${ users[account].mode }.`, author, permlink, 'Account state');
+            break;
+        case 'help':
+            const message = `#### Here are all the available commands:
+            * **!help** **-** gives a list of commands and their explanations.
+            * **!ignore** *username1* *username2* **-** tells  the bot to ignore some usernames mentionned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).
+            * **!mode** *[regular-advanced-off]* **-** sets the mentions checking to regular (only posts), advanced (posts and comments) or off (no checking). Alternatively, you can write *normal* or *on* instead of *regular*. You can also write *plus* instead of *advanced*.
+            * **!state** **-** gives the state of your account (*regular*, *advanced* or *off*).
+            * **!switch** *[regular-advanced-off]* **-** same as **!mode**.
+            * **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentionned in your posts.
+            
+            ###### Any idea on how to improve this bot ? Please contact @ragepeanut on any of his posts or send him a direct message on discord (RagePeanut#8078).`;
+            sendMessage(message, author, permlink, 'Commands list');
+            break;
         default:
             sendMessage('This command doesn\'t exist.', author, permlink, 'Unknown command');
     }
@@ -195,7 +216,7 @@ function processCommand(command, author, permlink) {
  */
 function sendMessage(message, author, permlink, title) {
     const metadata = {
-        app: 'checky/0.0.1',
+        app: 'checky/0.0.2',
         format: 'markdown',
         tags: [ 
             'mentions',
@@ -203,14 +224,15 @@ function sendMessage(message, author, permlink, title) {
             'checky'
         ]
     }
-    steemRequest.broadcast.comment(posting_key, author, permlink, 'checky', 're-' + permlink, title, message, JSON.stringify(metadata), function(err) {
+    const footer = '\n\n<sub>If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with <code>!help</code>.</sub>';
+    steemRequest.broadcast.comment(posting_key, author, permlink, 'checky', 're-' + permlink, title, message + footer, JSON.stringify(metadata), function(err) {
         console.log(err);
     });
 }
 
 /**
- * Adds users to the users array if not encountered before
- * @param {string[]} encounteredUsers
+ * Adds users to the users object if not encountered before
+ * @param {string[]} encounteredUsers The users encountered while reading an operation
  */
 function addUsers(...encounteredUsers) {
     encounteredUsers.forEach(user => {
