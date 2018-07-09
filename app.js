@@ -27,17 +27,16 @@ function stream() {
                 switch(operation[0]) {
                     case 'comment':
                         const author = operation[1].author;
-                        const parent_author = operation[1].parent_author;
+                        const parentAuthor = operation[1].parent_author;
                         const body = operation[1].body;
                         const permlink = operation[1].permlink;
     
-                        if(parent_author !== '') addUsers(author, parent_author);
-                        else addUsers(author);
+                        addUsers(author, parentAuthor);
     
-                        if(parent_author === 'checky') {
+                        if(parentAuthor === 'checky') {
                             const command = /[!/]([A-Za-z]+)(?:\s+(.+))?/.exec(body);
                             if(command[1]) processCommand(command, author, permlink);
-                        } else if(parent_author === '' && users[author].mode !== 'off' || users[author].mode === 'advanced') {
+                        } else if(parentAuthor === '' && users[author].mode !== 'off' || users[author].mode === 'advanced') {
                             try {
                                 const metadata = JSON.parse(operation[1].json_metadata);
                                 // Removing the punctuation at the end of some mentions, lower casing mentions, removing duplicates and already encountered existing users
@@ -50,6 +49,8 @@ function stream() {
                         break;
                     case 'vote':
                         addUsers(operation[1].voter, operation[1].author);
+                        // Setting the mode to off for the user if it has flagged the bot's comment
+                        if(operation[1].author === 'checky' && operation[1].weight < 0) users[voter].mode = 'off';
                         break;
                     case 'transfer':
                     case 'transfer_to_vesting':
@@ -178,6 +179,6 @@ function sendMessage(message, author, permlink, title) {
 
 function addUsers(...encounteredUsers) {
     encounteredUsers.forEach(user => {
-        if(!users[user]) users[user] = { mode: 'regular', ignored: [] };
+        if(user !== '' && !users[user]) users[user] = { mode: 'regular', ignored: [] };
     });
 }
