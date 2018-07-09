@@ -18,6 +18,9 @@ setInterval(() =>
 
 stream();
 
+/** 
+ * Streams operations from the blockchain and calls processCreatedPost or processCommand when necessary
+ */
 function stream() {
     steemStream.api.setOptions({ url: stream_nodes[0] });
     new Promise((resolve, reject) => {
@@ -70,6 +73,13 @@ function stream() {
     });
 }
 
+/**
+ * Checks that the comment operation is for a new post and calls processMentions
+ * @param {string[]} mentions 
+ * @param {string} body 
+ * @param {string} author 
+ * @param {string} permlink 
+ */
 function processCreatedPost(mentions, body, author, permlink) {
     steemRequest.api.getContent(author, permlink, (err, res) => {
         if(err) {
@@ -83,6 +93,14 @@ function processCreatedPost(mentions, body, author, permlink) {
     });
 }
 
+/**
+ * Filters out all the correct mentions from an array of possibly wrong mentions and calls sendMessage
+ * @param {string[]} mentions All the possibly wrong mentions
+ * @param {string} body The body of the post (used for social network checking)
+ * @param {string} author The author of the post
+ * @param {string} permlink The permlink of the post
+ * @param {string} title The title of the post
+ */
 function processMentions(mentions, body, author, permlink, title) {
     steemRequest.api.lookupAccountNames(mentions, (err, res) => {
         if(err) {
@@ -118,6 +136,12 @@ function processMentions(mentions, body, author, permlink, title) {
     });
 }
 
+/**
+ * Processes a command written by a user
+ * @param {RegExpExecArray} command The command written by the user as well as its parameters
+ * @param {string} author The user who wrote the command
+ * @param {string} permlink The permlink of the comment in which the command has been written
+ */
 function processCommand(command, author, permlink) {
     switch(command[1]) {
         case 'ignore':
@@ -162,6 +186,13 @@ function processCommand(command, author, permlink) {
     }
 }
 
+/**
+ * Broadcasts a comment on a post containing wrong mentions
+ * @param {string} message 
+ * @param {string} author 
+ * @param {string} permlink
+ * @param {string} title 
+ */
 function sendMessage(message, author, permlink, title) {
     const metadata = {
         app: 'checky/0.0.1',
@@ -177,6 +208,10 @@ function sendMessage(message, author, permlink, title) {
     });
 }
 
+/**
+ * Adds users to the users array if not encountered before
+ * @param {string[]} encounteredUsers
+ */
 function addUsers(...encounteredUsers) {
     encounteredUsers.forEach(user => {
         if(user !== '' && !users[user]) users[user] = { mode: 'regular', ignored: [] };
