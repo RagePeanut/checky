@@ -2,7 +2,9 @@ const _ = require('lodash');
 const fs = require('fs');
 const steemStream = require('steem');
 const steemRequest = require('steem');
-const { posting_key, request_nodes, stream_nodes } = require('./config');
+const { request_nodes, stream_nodes } = require('./config');
+
+const postingKey = process.env.CHECKY_POSTING_KEY;
 
 steemRequest.api.setOptions({ url: request_nodes[0] });
 
@@ -218,7 +220,7 @@ function sendMessage(message, author, permlink, title) {
         ]
     }
     const footer = '\n\n###### If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with `!help`.';
-    steemRequest.broadcast.comment(posting_key, author, permlink, 'checky', 're-' + author + '-' + permlink, title, message + footer, JSON.stringify(metadata), function(err) {
+    steemRequest.broadcast.comment(postingKey, author, permlink, 'checky', 're-' + author + '-' + permlink, title, message + footer, JSON.stringify(metadata), function(err) {
         console.log(err);
     });
 }

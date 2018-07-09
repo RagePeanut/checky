@@ -1,5 +1,4 @@
 {
-    "posting_key": "POSTING KEY HERE",
     "request_nodes": [
         "https://api.steemit.com",
         "https://gtg.steem.house:8090",
