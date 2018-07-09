@@ -41,7 +41,7 @@ function stream() {
                         if(parentAuthor === 'checky') {
                             // Parsing the command from the comment
                             const command = /[!/]([A-Za-z]+)(?:\s+(.+))?/.exec(body);
-                            if(command[1]) processCommand(command, author, permlink);
+                            if(command) processCommand(command, author, permlink);
                         } else if(parentAuthor === '' && users[author].mode !== 'off' || users[author].mode === 'advanced') {
                             try {
                                 const metadata = JSON.parse(operation[1].json_metadata);
@@ -78,10 +78,10 @@ function stream() {
 
 /**
  * Checks that the comment operation is for a new post and calls processMentions
- * @param {string[]} mentions 
- * @param {string} body 
- * @param {string} author 
- * @param {string} permlink 
+ * @param {string[]} mentions All the possibly wrong mentions
+ * @param {string} body The body of the post
+ * @param {string} author The author of the post
+ * @param {string} permlink The permlink of the post
  */
 function processCreatedPost(mentions, body, author, permlink) {
     steemRequest.api.getContent(author, permlink, (err, res) => {
@@ -92,7 +92,7 @@ function processCreatedPost(mentions, body, author, permlink) {
             steemRequest.api.setOptions({ url: request_nodes[0] });
             console.log(`Retrying with ${ request_nodes[0] }`)
             processCreatedPost(mentions, body, author, permlink);
-        } else if(res.last_update === res.created) processMentions(mentions, body, author, permlink, res.title);
+        } else if(res.last_update === res.created) processMentions(mentions, body, author, permlink, res.title, res.parent_author === '' ? 'post' : 'comment');
     });
 }
 
@@ -103,8 +103,9 @@ function processCreatedPost(mentions, body, author, permlink) {
  * @param {string} author The author of the post
  * @param {string} permlink The permlink of the post
  * @param {string} title The title of the post
+ * @param {string} type The type of the post (post or comment)
  */
-function processMentions(mentions, body, author, permlink, title) {
+function processMentions(mentions, body, author, permlink, title, type) {
     steemRequest.api.lookupAccountNames(mentions, (err, res) => {
         if(err) {
             console.error(`Request error (lookupAccountNames): ${ err.message } with ${ request_nodes[0] }`);
@@ -112,7 +113,7 @@ function processMentions(mentions, body, author, permlink, title) {
             request_nodes.push(request_nodes.shift());
             steemRequest.api.setOptions({ url: request_nodes[0] });
             console.log(`Retrying with ${ request_nodes[0] }`)
-            processMentions(mentions, body, author, permlink);
+            processMentions(mentions, body, author, permlink, title, type);
         } else {
             let wrongMentions = [];
             // Add each username that got a null result from the API (meaning the user doesn't exist) to the wrongMentions array
@@ -126,7 +127,7 @@ function processMentions(mentions, body, author, permlink, title) {
             }
             // Send a message if any wrong mention has been found in the post/comment
             if(wrongMentions.length > 0) {
-                let message = `Hi @${ author }, I'm @checky ! While checking the mentions made in this post I found out that `;
+                let message = `Hi @${ author }, I'm @checky ! While checking the mentions made in this ${ type } I found out that `;
                 if(wrongMentions.length > 1) {
                     wrongMentions = wrongMentions.map(mention => mention + ',');
                     wrongMentions[wrongMentions.length-1] = wrongMentions[wrongMentions.length-1].replace(',', '');
@@ -151,15 +152,15 @@ function processCommand(command, author, permlink) {
             if(command[2]) {
                 const mentions = command[2].split(/[\s,]+/).filter(mention => mention !== '').map(mention => mention.replace('@', ''));
                 users[author].ignored = _.union(users[author].ignored, mentions);
-                sendMessage(`The following mentions will now be ignored when made by you: ${ mentions.join(', ') }.\nIf for any reason you want to make @checky stop ignoring them, reply to any of my posts with "!unignore username1 username2 ...".`, author, permlink, `Added some ignored mentions for @${ author }`);
-            } else sendMessage('You didn\'t specify any username to ignore. Please try again by using the format "!ignore username1 username2 ...".', author, permlink, 'No username specified');
+                sendMessage(`The following mentions will now be ignored when made by you: ${ mentions.join(', ') }.\nIf for any reason you want to make @checky stop ignoring them, reply to any of my posts with \`!unignore username1 username2 ...\`.`, author, permlink, `Added some ignored mentions for @${ author }`);
+            } else sendMessage('You didn\'t specify any username to ignore. Please try again by using the format `!ignore username1 username2`.', author, permlink, 'No username specified');
             break;
         case 'unignore':
             if(command[2]) {
                 const mentions = command[2].split(/[\s,]+/).filter(mention => mention !== '').map(mention => mention.replace('@', ''));
                 mentions.forEach(mention => _.pull(users[author].ignored, mention));
-                sendMessage(`The following mentions will now be inspected by @checky when made by you: ${ mentions.join(', ') }.\nIf for any reason you want to make @checky start ignoring them again, reply to any of my posts with "!ignore username1 username2 ...".`, author, permlink, `Removed some ignored mentions for @${ author }`);
-            } else sendMessage('You didn\'t specify any username to unignore. Please try again by using the format "!unignore username1 username2 ...".', author, permlink, 'No username specified');
+                sendMessage(`The following mentions will now be checked by @checky when made by you: ${ mentions.join(', ') }.\nIf for any reason you want to make @checky start ignoring them again, reply to any of my posts with \`!ignore username1 username2 ...\`.`, author, permlink, `Removed some ignored mentions for @${ author }`);
+            } else sendMessage('You didn\'t specify any username to unignore. Please try again by using the format `!unignore username1 username2`.', author, permlink, 'No username specified');
             break;
         case 'mode':
         case 'switch':
@@ -171,16 +172,16 @@ function processCommand(command, author, permlink) {
                     case 'regular':
                     case 'normal':
                         users[author].mode = 'regular';
-                        sendMessage('Your account mode has been set to regular. You will now only get your mentions checked for posts you make.');
+                        sendMessage('Your account has been set to regular. You will now only get your mentions checked for posts you make.', author, permlink, 'Account set to regular');
                         break;
                     case 'advanced':
                     case 'plus':
                         users[author].mode = 'advanced';
-                        sendMessage('Your account mode has been set to advanced. You will now get your mentions checked for posts and comments you make.');
+                        sendMessage('Your account has been set to advanced. You will now get your mentions checked for posts and comments you make.', author, permlink, 'Account set to advanced');
                         break;
                     case 'off':
                         users[author].mode = 'off';
-                        sendMessage('Your account mode has been set to off. None of your mentions will be checked whatsoever.');
+                        sendMessage('Your account has been set to off. None of your mentions will now be checked whatsoever.', author, permlink, 'Account set to off');
                         break;
                     default:
                         sendMessage(`The ${ mode } mode doesn't exist. Your account is currently set to ${ users[account].mode }. To switch it to regular, advanced or off, please write \`!mode [regular-advanced-off]\`.`, author, permlink, 'Wrong mode specified');
@@ -188,18 +189,10 @@ function processCommand(command, author, permlink) {
             } else sendMessage(`You didn't spectify any mode to switch to. Please try again by using \`!${ command[1] } regular\`, \`!${ command[1] } advanced\` or \`!${ command[1] } off\`.`, author, permlink, 'No mode specified');
             break;
         case 'state':
-            sendMessage(`Your account is currently set to ${ users[account].mode }.`, author, permlink, 'Account state');
+            sendMessage(`Your account is currently set to ${ users[author].mode }.`, author, permlink, 'Account state');
             break;
         case 'help':
-            const message = `#### Here are all the available commands:
-            * **!help** **-** gives a list of commands and their explanations.
-            * **!ignore** *username1* *username2* **-** tells  the bot to ignore some usernames mentionned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).
-            * **!mode** *[regular-advanced-off]* **-** sets the mentions checking to regular (only posts), advanced (posts and comments) or off (no checking). Alternatively, you can write *normal* or *on* instead of *regular*. You can also write *plus* instead of *advanced*.
-            * **!state** **-** gives the state of your account (*regular*, *advanced* or *off*).
-            * **!switch** *[regular-advanced-off]* **-** same as **!mode**.
-            * **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentionned in your posts.
-            
-            ###### Any idea on how to improve this bot ? Please contact @ragepeanut on any of his posts or send him a direct message on discord (RagePeanut#8078).`;
+            const message = '#### Here are all the available commands:\n* **!help** **-** gives a list of commands and their explanations.\n* **!ignore** *username1* *username2* **-** tells  the bot to ignore some usernames mentionned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).\n* **!mode** *[regular-advanced-off]* **-** sets the mentions checking to regular (only posts), advanced (posts and comments) or off (no checking). Alternatively, you can write *normal* or *on* instead of *regular*. You can also write *plus* instead of *advanced*.\n* **!state** **-** gives the state of your account (*regular*, *advanced* or *off*).\n* **!switch** *[regular-advanced-off]* **-** same as **!mode**.\n* **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentionned in your posts.\n\n###### Any idea on how to improve this bot ? Please contact @ragepeanut on any of his posts or send him a direct message on discord (RagePeanut#8078).';
             sendMessage(message, author, permlink, 'Commands list');
             break;
         default:
@@ -209,10 +202,10 @@ function processCommand(command, author, permlink) {
 
 /**
  * Broadcasts a comment on a post containing wrong mentions
- * @param {string} message 
- * @param {string} author 
- * @param {string} permlink
- * @param {string} title 
+ * @param {string} message The message to broadcast
+ * @param {string} author The author of the post
+ * @param {string} permlink The permlink of the post
+ * @param {string} title The title of the message to broadcast
  */
 function sendMessage(message, author, permlink, title) {
     const metadata = {
@@ -224,8 +217,8 @@ function sendMessage(message, author, permlink, title) {
             'checky'
         ]
     }
-    const footer = '\n\n<sub>If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with <code>!help</code>.</sub>';
-    steemRequest.broadcast.comment(posting_key, author, permlink, 'checky', 're-' + permlink, title, message + footer, JSON.stringify(metadata), function(err) {
+    const footer = '\n\n###### If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with `!help`.';
+    steemRequest.broadcast.comment(posting_key, author, permlink, 'checky', 're-' + author + '-' + permlink, title, message + footer, JSON.stringify(metadata), function(err) {
         console.log(err);
     });
 }
