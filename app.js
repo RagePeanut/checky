@@ -134,8 +134,8 @@ function processMentions(mentions, body, author, permlink, title, type) {
                     wrongMentions = wrongMentions.map(mention => mention + ',');
                     wrongMentions[wrongMentions.length-1] = wrongMentions[wrongMentions.length-1].replace(',', '');
                     wrongMentions[wrongMentions.length-2] = wrongMentions[wrongMentions.length-2].replace(',', ' and');
-                    message += `${ wrongMentions.join(' ') } don't seem to exist on Steem. Maybe you made some typos ?`;
-                } else message += `${ wrongMentions[0] } doesn't seem to exist on Steem. Maybe you made a typo ?`;
+                    message += `${ wrongMentions.join(' ') } don't exist on Steem. Maybe you made some typos ?`;
+                } else message += `${ wrongMentions[0] } doesn't exist on Steem. Maybe you made a typo ?`;
                 sendMessage(message, author, permlink, 'Possible wrong mentions found on ' + title);
             }
         }
@@ -191,7 +191,9 @@ function processCommand(command, author, permlink) {
             } else sendMessage(`You didn't spectify any mode to switch to. Please try again by using \`!${ command[1] } regular\`, \`!${ command[1] } advanced\` or \`!${ command[1] } off\`.`, author, permlink, 'No mode specified');
             break;
         case 'state':
-            sendMessage(`Your account is currently set to ${ users[author].mode }.`, author, permlink, 'Account state');
+            let ignored = '';
+            if(users[author].ignored.length > 0) ignored = ' The following usernames are being ignored by @checky: ' + users[author].ignored.join(', ') + '.';
+            sendMessage(`Your account is currently set to ${ users[author].mode }.${ ignored }`, author, permlink, 'Account state');
             break;
         case 'help':
             const message = '#### Here are all the available commands:\n* **!help** **-** gives a list of commands and their explanations.\n* **!ignore** *username1* *username2* **-** tells  the bot to ignore some usernames mentionned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).\n* **!mode** *[regular-advanced-off]* **-** sets the mentions checking to regular (only posts), advanced (posts and comments) or off (no checking). Alternatively, you can write *normal* or *on* instead of *regular*. You can also write *plus* instead of *advanced*.\n* **!state** **-** gives the state of your account (*regular*, *advanced* or *off*).\n* **!switch** *[regular-advanced-off]* **-** same as **!mode**.\n* **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentionned in your posts.\n\n###### Any idea on how to improve this bot ? Please contact @ragepeanut on any of his posts or send him a direct message on discord (RagePeanut#8078).';
