@@ -304,7 +304,7 @@ function sendMessage(message, author, permlink, title) {
         ]
     }
     const footer = '\n\n###### If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with `!help`.';
-    steemRequest.broadcast.comment(postingKey, author, permlink, 'checky', 're-' + author + '-' + permlink, title, message + footer, JSON.stringify(metadata), function(err) {
+    steemRequest.broadcast.comment(postingKey, author, permlink, 'checky', 're-' + author.replace('.', '') + '-' + permlink, title, message + footer, JSON.stringify(metadata), function(err) {
         if(err) console.error(err);
     });
 }
