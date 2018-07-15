@@ -1,5 +1,5 @@
 # checky (0.0.2)
-A Steem bot that checks if the users mentioned in a post exist on the blockchain. If they don't, it indicates to authors that they may have made a typo while mentionning those users. 
+A Steem bot that checks if the users mentioned in a post exist on the blockchain. If they don't, it indicates to authors that they may have made a typo while mentioning those users. 
 
 See this bot in action here: https://steemit.com/@checky/comments
 
