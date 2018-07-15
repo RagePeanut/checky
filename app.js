@@ -6,6 +6,8 @@ const { request_nodes, stream_nodes } = require('./config');
 
 const postingKey = process.env.CHECKY_POSTING_KEY;
 
+const comments = [];
+
 steemRequest.api.setOptions({ url: request_nodes[0] });
 
 // Creating a users object and updating it with the content of ./data/users.json if the file exists 
@@ -20,6 +22,14 @@ setInterval(() =>
     })
 , 5 * 1000);
 
+// Sending a comment every 21 seconds if one has to be sent
+setInterval(() => {
+    if(comments[0]) {
+        const comment = comments.shift();
+        sendMessage(comment[0], comment[1], comment[2], comment[3]);
+    }
+}, 21 * 1000);
+
 stream();
 
 /** 
@@ -28,6 +38,7 @@ stream();
 function stream() {
     steemStream.api.setOptions({ url: stream_nodes[0] });
     new Promise((resolve, reject) => {
+        console.log('Stream started with', stream_nodes[0]);
         steemStream.api.streamOperations((err, operation) => {
             if(err) return reject(err);
             if(operation) {
@@ -181,7 +192,7 @@ function processCreatedPost(mentions, body, author, permlink) {
 }
 
 /**
- * Filters out all the correct mentions from an array of possibly wrong mentions and calls sendMessage
+ * Filters out all the correct mentions from an array of possibly wrong mentions and pushes a comment to the comments array if necessary
  * @param {string[]} mentions All the possibly wrong mentions
  * @param {string} body The body of the post (used for social network checking)
  * @param {string} author The author of the post
@@ -218,7 +229,7 @@ function processMentions(mentions, body, author, permlink, title, type) {
                     wrongMentions[wrongMentions.length-2] = wrongMentions[wrongMentions.length-2].replace(',', ' and');
                     message += `${ wrongMentions.join(' ') } don't exist on Steem. Maybe you made some typos ?`;
                 } else message += `${ wrongMentions[0] } doesn't exist on Steem. Maybe you made a typo ?`;
-                sendMessage(message, author, permlink, 'Possible wrong mentions found on ' + title);
+                comments.push([message, author, permlink, 'Possible wrong mentions found in ' + title]);
             }
         }
     });
@@ -236,15 +247,15 @@ function processCommand(command, author, permlink) {
             if(command[2]) {
                 const mentions = command[2].split(/[\s,]+/).filter(mention => mention !== '').map(mention => mention.replace('@', '').toLowerCase());
                 users[author].ignored = _.union(users[author].ignored, mentions);
-                sendMessage(`The following mentions will now be ignored when made by you: ${ mentions.join(', ') }.\nIf for any reason you want to make @checky stop ignoring them, reply to any of my posts with \`!unignore username1 username2 ...\`.`, author, permlink, `Added some ignored mentions for @${ author }`);
-            } else sendMessage('You didn\'t specify any username to ignore. Please try again by using the format `!ignore username1 username2`.', author, permlink, 'No username specified');
+                comments.push([`The following mentions will now be ignored when made by you: ${ mentions.join(', ') }.\nIf for any reason you want to make @checky stop ignoring them, reply to any of my posts with \`!unignore username1 username2 ...\`.`, author, permlink, `Added some ignored mentions for @${ author }`]);
+            } else comments.push(['You didn\'t specify any username to ignore. Please try again by using the format `!ignore username1 username2`.', author, permlink, 'No username specified']);
             break;
         case 'unignore':
             if(command[2]) {
                 const mentions = command[2].split(/[\s,]+/).filter(mention => mention !== '').map(mention => mention.replace('@', '').toLowerCase());
                 mentions.forEach(mention => _.pull(users[author].ignored, mention));
-                sendMessage(`The following mentions will now be checked by @checky when made by you: ${ mentions.join(', ') }.\nIf for any reason you want to make @checky start ignoring them again, reply to any of my posts with \`!ignore username1 username2 ...\`.`, author, permlink, `Removed some ignored mentions for @${ author }`);
-            } else sendMessage('You didn\'t specify any username to unignore. Please try again by using the format `!unignore username1 username2`.', author, permlink, 'No username specified');
+                comments.push([`The following mentions will now be checked by @checky when made by you: ${ mentions.join(', ') }.\nIf for any reason you want to make @checky start ignoring them again, reply to any of my posts with \`!ignore username1 username2 ...\`.`, author, permlink, `Removed some ignored mentions for @${ author }`]);
+            } else comments.push(['You didn\'t specify any username to unignore. Please try again by using the format `!unignore username1 username2`.', author, permlink, 'No username specified']);
             break;
         case 'mode':
         case 'switch':
@@ -256,33 +267,33 @@ function processCommand(command, author, permlink) {
                     case 'regular':
                     case 'normal':
                         users[author].mode = 'regular';
-                        sendMessage('Your account has been set to regular. You will now only get your mentions checked for posts you make.', author, permlink, 'Account set to regular');
+                        comments.push(['Your account has been set to regular. You will now only get your mentions checked for posts you make.', author, permlink, 'Account set to regular']);
                         break;
                     case 'advanced':
                     case 'plus':
                         users[author].mode = 'advanced';
-                        sendMessage('Your account has been set to advanced. You will now get your mentions checked for posts and comments you make.', author, permlink, 'Account set to advanced');
+                        comments.push(['Your account has been set to advanced. You will now get your mentions checked for posts and comments you make.', author, permlink, 'Account set to advanced']);
                         break;
                     case 'off':
                         users[author].mode = 'off';
-                        sendMessage('Your account has been set to off. None of your mentions will now be checked whatsoever.', author, permlink, 'Account set to off');
+                        comments.push(['Your account has been set to off. None of your mentions will now be checked whatsoever.', author, permlink, 'Account set to off']);
                         break;
                     default:
-                        sendMessage(`The ${ mode } mode doesn't exist. Your account is currently set to ${ users[account].mode }. To switch it to regular, advanced or off, please write \`!mode [regular-advanced-off]\`.`, author, permlink, 'Wrong mode specified');
+                        comments.push([`The ${ mode } mode doesn't exist. Your account is currently set to ${ users[account].mode }. To switch it to regular, advanced or off, please write \`!mode [regular-advanced-off]\`.`, author, permlink, 'Wrong mode specified']);
                 }
-            } else sendMessage(`You didn't spectify any mode to switch to. Please try again by using \`!${ command[1] } regular\`, \`!${ command[1] } advanced\` or \`!${ command[1] } off\`.`, author, permlink, 'No mode specified');
+            } else comments.push([`You didn't spectify any mode to switch to. Please try again by using \`!${ command[1] } regular\`, \`!${ command[1] } advanced\` or \`!${ command[1] } off\`.`, author, permlink, 'No mode specified']);
             break;
         case 'state':
             let ignored = 'No mentions are being ignored by @checky';
             if(users[author].ignored.length > 0) ignored = 'The following mentions are being ignored by @checky: ' + users[author].ignored.join(', ');
-            sendMessage(`Your account is currently set to ${ users[author].mode }. ${ ignored }.`, author, permlink, 'Account state');
+            comments.push([`Your account is currently set to ${ users[author].mode }. ${ ignored }.`, author, permlink, 'Account state']);
             break;
         case 'help':
             const message = '#### Here are all the available commands:\n* **!help** **-** gives a list of commands and their explanations.\n* **!ignore** *username1* *username2* **-** tells  the bot to ignore some usernames mentionned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).\n* **!mode** *[regular-advanced-off]* **-** sets the mentions checking to regular (only posts), advanced (posts and comments) or off (no checking). Alternatively, you can write *normal* or *on* instead of *regular*. You can also write *plus* instead of *advanced*.\n* **!state** **-** gives the state of your account (*regular*, *advanced* or *off*).\n* **!switch** *[regular-advanced-off]* **-** same as **!mode**.\n* **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentionned in your posts.\n\n###### Any idea on how to improve this bot ? Please contact @ragepeanut on any of his posts or send him a direct message on discord (RagePeanut#8078).';
-            sendMessage(message, author, permlink, 'Commands list');
+            comments.push([message, author, permlink, 'Commands list']);
             break;
         default:
-            sendMessage('This command doesn\'t exist.', author, permlink, 'Unknown command');
+            comments.push(['This command doesn\'t exist.', author, permlink, 'Unknown command']);
     }
 }
 
@@ -305,7 +316,10 @@ function sendMessage(message, author, permlink, title) {
     }
     const footer = '\n\n###### If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with `!help`.';
     steemRequest.broadcast.comment(postingKey, author, permlink, 'checky', 're-' + author.replace('.', '') + '-' + permlink, title, message + footer, JSON.stringify(metadata), function(err) {
-        if(err) console.error(err);
+        if(err) {
+            console.log(err);
+            comments.unshift([message, author, permlink, title]);
+        }
     });
 }
 
