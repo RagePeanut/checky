@@ -257,6 +257,10 @@ function processCommand(command, author, permlink) {
                 comments.push([`The following mentions will now be checked by @checky when made by you: ${ mentions.join(', ') }.\nIf for any reason you want to make @checky start ignoring them again, reply to any of my posts with \`!ignore username1 username2 ...\`.`, author, permlink, `Removed some ignored mentions for @${ author }`]);
             } else comments.push(['You didn\'t specify any username to unignore. Please try again by using the format `!unignore username1 username2`.', author, permlink, 'No username specified']);
             break;
+        // Shortcuts for !mode [on-off]
+        case 'on':
+        case 'off':
+            command = [command[0], 'mode', command[1]];
         case 'mode':
         case 'switch':
             if(command[2]) {
@@ -289,7 +293,7 @@ function processCommand(command, author, permlink) {
             comments.push([`Your account is currently set to ${ users[author].mode }. ${ ignored }.`, author, permlink, 'Account state']);
             break;
         case 'help':
-            const message = '#### Here are all the available commands:\n* **!help** **-** gives a list of commands and their explanations.\n* **!ignore** *username1* *username2* **-** tells  the bot to ignore some usernames mentioned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).\n* **!mode** *[regular-advanced-off]* **-** sets the mentions checking to regular (only posts), advanced (posts and comments) or off (no checking). Alternatively, you can write *normal* or *on* instead of *regular*. You can also write *plus* instead of *advanced*.\n* **!state** **-** gives the state of your account (*regular*, *advanced* or *off*).\n* **!switch** *[regular-advanced-off]* **-** same as **!mode**.\n* **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentioned in your posts.\n\n###### Any idea on how to improve this bot ? Please contact @ragepeanut on any of his posts or send him a direct message on discord (RagePeanut#8078).';
+            const message = '#### Here are all the available commands:\n* **!help** **-** gives a list of commands and their explanations.\n* **!ignore** *username1* *username2* **-** tells  the bot to ignore some usernames mentioned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).\n* **!mode** *[regular-advanced-off]* **-** sets the mentions checking to regular (only posts), advanced (posts and comments) or off (no checking). Alternatively, you can write *normal* or *on* instead of *regular*. You can also write *plus* instead of *advanced*.\n* **!off** **-** shortcut for **!mode off**.\n* **!on** **-** shortcut for **!mode on**.\n* **!state** **-** gives the state of your account (*regular*, *advanced* or *off*).\n* **!switch** *[regular-advanced-off]* **-** same as **!mode**.\n* **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentioned in your posts.\n\n###### Any idea on how to improve this bot ? Please contact @ragepeanut on any of his posts or send him a direct message on discord (RagePeanut#8078).';
             comments.push([message, author, permlink, 'Commands list']);
             break;
         default:
@@ -315,12 +319,13 @@ function sendMessage(message, author, permlink, title) {
         ]
     }
     const footer = '\n\n###### If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with `!help`.';
-    steemRequest.broadcast.comment(postingKey, author, permlink, 'checky', 're-' + author.replace('.', '') + '-' + permlink, title, message + footer, JSON.stringify(metadata), function(err) {
-        if(err) {
-            console.log(err);
-            comments.unshift([message, author, permlink, title]);
-        }
-    });
+    // steemRequest.broadcast.comment(postingKey, author, permlink, 'checky', 're-' + author.replace('.', '') + '-' + permlink, title, message + footer, JSON.stringify(metadata), function(err) {
+    //     if(err) {
+    //         console.log(err);
+    //         comments.unshift([message, author, permlink, title]);
+    //     }
+    // });
+    console.log(message);
 }
 
 /**
