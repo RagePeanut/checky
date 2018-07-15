@@ -53,7 +53,7 @@ function stream() {
     
                         if(parentAuthor === 'checky') {
                             // Parsing the command from the comment
-                            const command = /[!/]([A-Za-z]+)(?:\s+(.+))?/.exec(body);
+                            const command = /^(?:\s*)!([A-Za-z]+)(?:\s+(.+))?/.exec(body);
                             if(command) processCommand(command, author, permlink);
                         } else if(parentAuthor === '' && users[author].mode !== 'off' || users[author].mode === 'advanced') {
                             try {
