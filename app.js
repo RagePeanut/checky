@@ -59,10 +59,14 @@ function stream() {
                         } else if(parentAuthor === '' && users[author].mode !== 'off' || users[author].mode === 'advanced') {
                             try {
                                 const metadata = JSON.parse(operation[1].json_metadata);
-                                // Creating a regex matching all variations of the author username
-                                const authorRegex = new RegExp(author.replace(/([a-z]+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
-                                // Removing the punctuation at the end of some mentions, lower casing mentions, removing duplicates, variations of the author username and already encountered existing users
-                                let mentions = _.uniq(metadata.users.map(user => user.replace(/[?¿!¡.,;:-]+$/, '').toLowerCase())).filter(user => user.length > 2 && !authorRegex.test(user) && !users[user]);
+                                // Removing the punctuation at the end of some mentions, lower casing mentions, removing duplicates and already encountered existing users
+                                let mentions = _.uniq(metadata.users.map(user => user.replace(/[?¿!¡.,;:-]+$/, '').toLowerCase())).filter(user => user.length > 2 && !users[user]);
+                                // Removing all variations of the author username
+                                const authorRegex = new RegExp(author.replace(/([a-z]+|\d+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
+                                mentions = mentions.filter(mention => {
+                                    return mention.match(authorRegex).every(match => match === undefined || match === '');
+                                });
+                                console.log(mentions);
                                 // Removing ignored mentions
                                 if(users[author].ignored.length > 0) mentions = mentions.filter(mention => !users[author].ignored.includes(mention));
                                 if(mentions.length > 0) processCreatedPost(mentions, body, author, permlink);
