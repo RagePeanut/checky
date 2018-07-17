@@ -6,8 +6,6 @@ const { request_nodes, stream_nodes } = require('./config');
 
 const postingKey = process.env.CHECKY_POSTING_KEY;
 
-const comments = [];
-
 steem.api.setOptions({ url: request_nodes[0] });
 
 // Creating a users object and updating it with the content of ./data/users.json if the file exists 
@@ -22,6 +20,7 @@ setInterval(() =>
     })
 , 5 * 1000);
 
+const comments = [];
 // Checking every second if a comment has to be sent and sending it
 let commentsInterval = setInterval(() => {
     if(comments[0]) {
@@ -61,7 +60,7 @@ function stream() {
                             try {
                                 const metadata = JSON.parse(operation[1].json_metadata);
                                 // Removing the punctuation at the end of some mentions, lower casing mentions, removing duplicates and already encountered existing users
-                                let mentions = _.uniq(metadata.users.map(user => user.replace(/[?¿!¡.,;:-]+$/, '').toLowerCase())).filter(user => !users[user]);
+                                let mentions = _.uniq(metadata.users.map(user => user.replace(/[?¿!¡.,;:-]+$/, '').toLowerCase())).filter(user => user.length > 2 && !users[user]);
                                 // Removing ignored mentions
                                 if(users[author].ignored.length > 0) mentions = mentions.filter(mention => !users[author].ignored.includes(mention));
                                 if(mentions.length > 0) processCreatedPost(mentions, body, author, permlink);
@@ -217,7 +216,7 @@ function processMentions(mentions, body, author, permlink, title, type) {
             for(let i = 0; i < mentions.length; i++) {
                 if(res[i] === null) {
                     // Add the username to the wrongMentions array only if it doesn't contain a social network reference in the ~600 characters surrounding it
-                    const regex = new RegExp('(?:^|[\\s\\S]{0,299}[^\\w/-])@' + _.escapeRegExp(mentions[i]) + '(?:[^\\w/-][\\s\\S]{0,299}|$)', 'gi');
+                    const regex = new RegExp('(?:^|[\\s\\S]{0,299}[^\\w/=-])@' + _.escapeRegExp(mentions[i]) + '(?:[^\\w/-][\\s\\S]{0,299}|$)', 'gi');
                     const match = body.match(regex);
                     if(match && !/(insta|tele)gram|tw(it?ter|eet)|golos|medium|brunch|텔레그램/i.test(match)) wrongMentions.push('@' + mentions[i]);
                 } else addUsers(mentions[i]);
