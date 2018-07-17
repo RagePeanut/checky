@@ -59,8 +59,10 @@ function stream() {
                         } else if(parentAuthor === '' && users[author].mode !== 'off' || users[author].mode === 'advanced') {
                             try {
                                 const metadata = JSON.parse(operation[1].json_metadata);
-                                // Removing the punctuation at the end of some mentions, lower casing mentions, removing duplicates and already encountered existing users
-                                let mentions = _.uniq(metadata.users.map(user => user.replace(/[?¿!¡.,;:-]+$/, '').toLowerCase())).filter(user => user.length > 2 && !users[user]);
+                                // Creating a regex matching all variations of the author username
+                                const authorRegex = new RegExp(author.replace(/([a-z]+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
+                                // Removing the punctuation at the end of some mentions, lower casing mentions, removing duplicates, variations of the author username and already encountered existing users
+                                let mentions = _.uniq(metadata.users.map(user => user.replace(/[?¿!¡.,;:-]+$/, '').toLowerCase())).filter(user => user.length > 2 && !authorRegex.test(author) && !users[user]);
                                 // Removing ignored mentions
                                 if(users[author].ignored.length > 0) mentions = mentions.filter(mention => !users[author].ignored.includes(mention));
                                 if(mentions.length > 0) processCreatedPost(mentions, body, author, permlink);
@@ -212,16 +214,16 @@ function processMentions(mentions, body, author, permlink, title, type) {
             processMentions(mentions, body, author, permlink, title, type);
         } else {
             let wrongMentions = [];
-            // Add each username that got a null result from the API (meaning the user doesn't exist) to the wrongMentions array
+            // Adding each username that got a null result from the API (meaning the user doesn't exist) to the wrongMentions array
             for(let i = 0; i < mentions.length; i++) {
                 if(res[i] === null) {
-                    // Add the username to the wrongMentions array only if it doesn't contain a social network reference in the ~600 characters surrounding it
+                    // Adding the username to the wrongMentions array only if it doesn't contain a social network reference in the ~600 characters surrounding it
                     const regex = new RegExp('(?:^|[\\s\\S]{0,299}[^\\w/=-])@' + _.escapeRegExp(mentions[i]) + '(?:[^\\w/-][\\s\\S]{0,299}|$)', 'gi');
                     const match = body.match(regex);
                     if(match && !/(insta|tele)gram|tw(it?ter|eet)|golos|medium|brunch|텔레그램/i.test(match)) wrongMentions.push('@' + mentions[i]);
                 } else addUsers(mentions[i]);
             }
-            // Send a message if any wrong mention has been found in the post/comment
+            // Sending a message if any wrong mention has been found in the post/comment
             if(wrongMentions.length > 0) {
                 let message = `Hi @${ author }, I'm @checky ! While checking the mentions made in this ${ type } I found out that `;
                 if(wrongMentions.length > 1) {
