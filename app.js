@@ -1,14 +1,14 @@
 const _ = require('lodash');
 const fs = require('fs');
+const steem = require('steem');
 const steemStream = require('steem');
-const steemRequest = require('steem');
 const { request_nodes, stream_nodes } = require('./config');
 
 const postingKey = process.env.CHECKY_POSTING_KEY;
 
 const comments = [];
 
-steemRequest.api.setOptions({ url: request_nodes[0] });
+steem.api.setOptions({ url: request_nodes[0] });
 
 // Creating a users object and updating it with the content of ./data/users.json if the file exists 
 let users = {};
@@ -18,17 +18,19 @@ else fs.mkdirSync('data');
 // Updating the ./data/users.json file with the content of the users object every 5 seconds
 setInterval(() => 
     fs.writeFile('data/users.json', JSON.stringify(users), err => {
-        if(err) console.log(err);
+        if(err) console.error(err.message);
     })
 , 5 * 1000);
 
-// Sending a comment every 21 seconds if one has to be sent
-setInterval(() => {
+// Checking every second if a comment has to be sent and sending it
+let commentsInterval = setInterval(() => {
     if(comments[0]) {
+        // Making sure that no comment is sent while processing this one
+        clearInterval(commentsInterval);
         const comment = comments.shift();
         sendMessage(comment[0], comment[1], comment[2], comment[3]);
     }
-}, 21 * 1000);
+}, 1000);
 
 stream();
 
@@ -179,13 +181,13 @@ function stream() {
  * @param {string} permlink The permlink of the post
  */
 function processCreatedPost(mentions, body, author, permlink) {
-    steemRequest.api.getContent(author, permlink, (err, res) => {
+    steem.api.getContent(author, permlink, (err, res) => {
         if(err) {
             console.error(`Request error (getContent): ${ err.message } with ${ request_nodes[0] }`);
             // Putting the node where the error comes from at the end of the array
             request_nodes.push(request_nodes.shift());
-            steemRequest.api.setOptions({ url: request_nodes[0] });
-            console.log(`Retrying with ${ request_nodes[0] }`)
+            steem.api.setOptions({ url: request_nodes[0] });
+            console.log(`Retrying with ${ request_nodes[0] }`);
             processCreatedPost(mentions, body, author, permlink);
         } else if(res.last_update === res.created) processMentions(mentions, body, author, permlink, res.title, res.parent_author === '' ? 'post' : 'comment');
     });
@@ -201,13 +203,13 @@ function processCreatedPost(mentions, body, author, permlink) {
  * @param {string} type The type of the post (post or comment)
  */
 function processMentions(mentions, body, author, permlink, title, type) {
-    steemRequest.api.lookupAccountNames(mentions, (err, res) => {
+    steem.api.lookupAccountNames(mentions, (err, res) => {
         if(err) {
             console.error(`Request error (lookupAccountNames): ${ err.message } with ${ request_nodes[0] }`);
             // Putting the node where the error comes from at the end of the array
             request_nodes.push(request_nodes.shift());
-            steemRequest.api.setOptions({ url: request_nodes[0] });
-            console.log(`Retrying with ${ request_nodes[0] }`)
+            steem.api.setOptions({ url: request_nodes[0] });
+            console.log(`Retrying with ${ request_nodes[0] }`);
             processMentions(mentions, body, author, permlink, title, type);
         } else {
             let wrongMentions = [];
@@ -217,7 +219,7 @@ function processMentions(mentions, body, author, permlink, title, type) {
                     // Add the username to the wrongMentions array only if it doesn't contain a social network reference in the ~600 characters surrounding it
                     const regex = new RegExp('(?:^|[\\s\\S]{0,299}[^\\w/-])@' + _.escapeRegExp(mentions[i]) + '(?:[^\\w/-][\\s\\S]{0,299}|$)', 'gi');
                     const match = body.match(regex);
-                    if(match && !/(insta|tele)gram|tw(itter|eet)|medium|brunch|텔레그램/i.test(match)) wrongMentions.push('@' + mentions[i]);
+                    if(match && !/(insta|tele)gram|tw(it?ter|eet)|golos|medium|brunch|텔레그램/i.test(match)) wrongMentions.push('@' + mentions[i]);
                 } else addUsers(mentions[i]);
             }
             // Send a message if any wrong mention has been found in the post/comment
@@ -319,13 +321,28 @@ function sendMessage(message, author, permlink, title) {
         ]
     }
     const footer = '\n\n###### If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with `!help`.';
-    // steemRequest.broadcast.comment(postingKey, author, permlink, 'checky', 're-' + author.replace('.', '') + '-' + permlink, title, message + footer, JSON.stringify(metadata), function(err) {
-    //     if(err) {
-    //         console.log(err);
-    //         comments.unshift([message, author, permlink, title]);
-    //     }
-    // });
-    console.log(message);
+    steem.broadcast.comment(postingKey, author, permlink, 'checky', 're-' + author.replace('.', '') + '-' + permlink, title, message + footer, JSON.stringify(metadata), function(err) {
+        if(err) {
+            console.error(`Broadcast error: ${ err.message } with ${ request_nodes[0] }`);
+            // Putting the node where the error comes from at the end of the array
+            request_nodes.push(request_nodes.shift());
+            steem.api.setOptions({ url: request_nodes[0] });
+            console.log(`Retrying with ${ request_nodes[0] }`);
+            sendMessage(message, author, permlink, title);
+        } else {
+            // Making sure that the 20 seconds delay between comments is respected
+            setTimeout(() => {
+                commentsInterval = setInterval(() => {
+                    if(comments[0]) {
+                        // Making sure that no comment is sent while processing this one
+                        clearInterval(commentsInterval);
+                        const comment = comments.shift();
+                        sendMessage(comment[0], comment[1], comment[2], comment[3]);
+                    }
+                }, 1000);
+            }, 19000);
+        }
+    });
 }
 
 /**
