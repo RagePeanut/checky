@@ -66,7 +66,6 @@ function stream() {
                                 mentions = mentions.filter(mention => {
                                     return mention.match(authorRegex).every(match => match === undefined || match === '');
                                 });
-                                console.log(mentions);
                                 // Removing ignored mentions
                                 if(users[author].ignored.length > 0) mentions = mentions.filter(mention => !users[author].ignored.includes(mention));
                                 if(mentions.length > 0) processCreatedPost(mentions, body, author, permlink);
@@ -224,7 +223,7 @@ function processMentions(mentions, body, author, permlink, title, type) {
                     // Adding the username to the wrongMentions array only if it doesn't contain a social network reference in the ~600 characters surrounding it
                     const regex = new RegExp('(?:^|[\\s\\S]{0,299}[^\\w/=-])@' + _.escapeRegExp(mentions[i]) + '(?:[^\\w/-][\\s\\S]{0,299}|$)', 'gi');
                     const match = body.match(regex);
-                    if(match && !/(insta|tele)gram|tw(it?ter|eet)|golos|medium|brunch|텔레그램/i.test(match)) wrongMentions.push('@' + mentions[i]);
+                    if(match && !/(insta|tele)gram|tw(it?ter|eet)|golos|discord|medium|brunch|텔레그램/i.test(match)) wrongMentions.push('@' + mentions[i]);
                 } else addUsers(mentions[i]);
             }
             // Sending a message if any wrong mention has been found in the post/comment
