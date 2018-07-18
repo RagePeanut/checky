@@ -315,8 +315,8 @@ function processCommand(command, author, permlink) {
                 const delay = parseInt(command[2]);
                 if(delay) {
                     users[author].delay = Math.abs(delay);
-                    if(delay > 0 ) comments.push([`The delay has been set to ${ delay } minute${ delay > 1 ? 's' : '' }. @checky will now wait ${ delay } minute${ delay > 1 ? 's' : '' } before checking your mentions.`], author, permlink, `Delay set to ${ delay } minute${ delay > 1 ? 's' : '' }`);
-                    else comments.push([`The delay has been set to ${ delay } minutes. @checky will instantly check your mentions when you post.`], author, permlink, `Delay set to ${ delay } minute${ delay > 1 ? 's' : '' }`)
+                    if(delay > 0 ) comments.push([`The delay has been set to ${ delay } minute${ delay > 1 ? 's' : '' }. @checky will now wait ${ delay } minute${ delay > 1 ? 's' : '' } before checking your mentions.`, author, permlink, `Delay set to ${ delay } minute${ delay > 1 ? 's' : '' }`]);
+                    else comments.push([`The delay has been set to ${ delay } minutes. @checky will instantly check your mentions when you post.`, author, permlink, `Delay set to ${ delay } minute${ delay > 1 ? 's' : '' }`])
                 } else comments.push(['You didn\'t correctly specify the delay. Please try again by using a number to represent the delay.', author, permlink, `Delay wrongly specified`]);
             } else comments.push([`You didn't specify the delay. Please try again by using \`!${ command[1] } minutes`, author, permlink, 'No delay specified']);
             break;
