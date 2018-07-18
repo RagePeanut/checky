@@ -57,19 +57,7 @@ function stream() {
                             const command = /^(?:\s*)!([A-Za-z]+)(?:\s+(.+))?/.exec(body);
                             if(command) processCommand(command, author, permlink);
                         } else if(parentAuthor === '' && users[author].mode !== 'off' || users[author].mode === 'advanced') {
-                            try {
-                                const metadata = JSON.parse(operation[1].json_metadata);
-                                // Removing the punctuation at the end of some mentions, lower casing mentions, removing duplicates and already encountered existing users
-                                let mentions = _.uniq(metadata.users.map(user => user.replace(/[?¿!¡.,;:-]+$/, '').toLowerCase())).filter(user => user.length > 2 && !users[user]);
-                                // Removing all variations of the author username
-                                const authorRegex = new RegExp(author.replace(/([a-z]+|\d+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
-                                mentions = mentions.filter(mention => {
-                                    return mention.match(authorRegex).every(match => match === undefined || match === '');
-                                });
-                                // Removing ignored mentions
-                                if(users[author].ignored.length > 0) mentions = mentions.filter(mention => !users[author].ignored.includes(mention));
-                                if(mentions.length > 0) processCreatedPost(mentions, body, author, permlink);
-                            } catch(err) {}
+                            processPost(body, author, permlink, true);
                         }
                         break;
                     case 'vote':
@@ -179,12 +167,12 @@ function stream() {
 
 /**
  * Checks that the comment operation is for a new post and calls processMentions
- * @param {string[]} mentions All the possibly wrong mentions
  * @param {string} body The body of the post
  * @param {string} author The author of the post
  * @param {string} permlink The permlink of the post
+ * @param {boolean} mustBeNew Post must be new (true) or can have been updated (false)
  */
-function processCreatedPost(mentions, body, author, permlink) {
+function processPost(body, author, permlink, mustBeNew) {
     steem.api.getContent(author, permlink, (err, res) => {
         if(err) {
             console.error(`Request error (getContent): ${ err.message } with ${ request_nodes[0] }`);
@@ -192,8 +180,31 @@ function processCreatedPost(mentions, body, author, permlink) {
             request_nodes.push(request_nodes.shift());
             steem.api.setOptions({ url: request_nodes[0] });
             console.log(`Retrying with ${ request_nodes[0] }`);
-            processCreatedPost(mentions, body, author, permlink);
-        } else if(res.last_update === res.created) processMentions(mentions, body, author, permlink, res.title, res.parent_author === '' ? 'post' : 'comment');
+            processPost(body, author, permlink, mustBeNew);
+        } else if(author === 'nuttinghere') {
+            if(mustBeNew && res.last_update === res.created) {
+                if(users[author].delay > 0) {
+                    setTimeout(() => { 
+                        processPost(body, author, permlink, false);
+                    }, users[author].delay * 60 * 1000);
+                } else mustBeNew = false;
+            }
+            if(!mustBeNew) {
+                try {
+                    const metadata = JSON.parse(res.json_metadata);
+                    // Removing the punctuation at the end of some mentions, lower casing mentions, removing duplicates and already encountered existing users
+                    let mentions = _.uniq(metadata.users.map(user => user.replace(/[?¿!¡.,;:-]+$/, '').toLowerCase())).filter(user => user.length > 2 && !users[user]);
+                    // Removing all variations of the author username
+                    const authorRegex = new RegExp(author.replace(/([a-z]+|\d+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
+                    mentions = mentions.filter(mention => {
+                        return mention.match(authorRegex).every(match => match === undefined || match === '');
+                    });
+                    // Removing ignored mentions
+                    if(users[author].ignored.length > 0) mentions = mentions.filter(mention => !users[author].ignored.includes(mention));
+                    if(mentions.length > 0) processMentions(mentions, body, author, permlink, res.title, res.parent_author === '' ? 'post' : 'comment');
+                } catch(err) {}
+            }
+        }
     });
 }
 
@@ -296,10 +307,21 @@ function processCommand(command, author, permlink) {
         case 'state':
             let ignored = 'No mentions are being ignored by @checky';
             if(users[author].ignored.length > 0) ignored = 'The following mentions are being ignored by @checky: ' + users[author].ignored.join(', ');
-            comments.push([`Your account is currently set to ${ users[author].mode }. ${ ignored }.`, author, permlink, 'Account state']);
+            comments.push([`Your account is currently set to ${ users[author].mode }. Your posts are being checked ${ users[author].delay } minute${ users[author].delay !== 1 ? 's' : '' } after being posted. ${ ignored }.`, author, permlink, 'Account state']);
+            break;
+        case 'wait':
+        case 'delay':
+            if(command[2]) {
+                const delay = parseInt(command[2]);
+                if(delay) {
+                    users[author].delay = Math.abs(delay);
+                    if(delay > 0 ) comments.push([`The delay has been set to ${ delay } minute${ delay > 1 ? 's' : '' }. @checky will now wait ${ delay } minute${ delay > 1 ? 's' : '' } before checking your mentions.`], author, permlink, `Delay set to ${ delay } minute${ delay > 1 ? 's' : '' }`);
+                    else comments.push([`The delay has been set to ${ delay } minutes. @checky will instantly check your mentions when you post.`], author, permlink, `Delay set to ${ delay } minute${ delay > 1 ? 's' : '' }`)
+                } else comments.push(['You didn\'t correctly specify the delay. Please try again by using a number to represent the delay.', author, permlink, `Delay wrongly specified`]);
+            } else comments.push([`You didn't specify the delay. Please try again by using \`!${ command[1] } minutes`, author, permlink, 'No delay specified']);
             break;
         case 'help':
-            const message = '#### Here are all the available commands:\n* **!help** **-** gives a list of commands and their explanations.\n* **!ignore** *username1* *username2* **-** tells  the bot to ignore some usernames mentioned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).\n* **!mode** *[regular-advanced-off]* **-** sets the mentions checking to regular (only posts), advanced (posts and comments) or off (no checking). Alternatively, you can write *normal* or *on* instead of *regular*. You can also write *plus* instead of *advanced*.\n* **!off** **-** shortcut for **!mode off**.\n* **!on** **-** shortcut for **!mode on**.\n* **!state** **-** gives the state of your account (*regular*, *advanced* or *off*).\n* **!switch** *[regular-advanced-off]* **-** same as **!mode**.\n* **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentioned in your posts.\n\n###### Any idea on how to improve this bot ? Please contact @ragepeanut on any of his posts or send him a direct message on discord (RagePeanut#8078).';
+            const message = '#### Here are all the available commands:\n* **!delay** *minutes* **-** tells the bot to wait X minutes before checking your posts.\n* **!help** **-** gives a list of commands and their explanations.\n* **!ignore** *username1* *username2* **-** tells  the bot to ignore some usernames mentioned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).\n* **!mode** *[regular-advanced-off]* **-** sets the mentions checking to regular (only posts), advanced (posts and comments) or off (no checking). Alternatively, you can write *normal* or *on* instead of *regular*. You can also write *plus* instead of *advanced*.\n* **!off** **-** shortcut for **!mode off**.\n* **!on** **-** shortcut for **!mode on**.\n* **!state** **-** gives the state of your account (*regular*, *advanced* or *off*).\n* **!switch** *[regular-advanced-off]* **-** same as **!mode**.\n* **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentioned in your posts.\n* **!wait** *minutes* - same as **!delay**.\n\n###### Any idea on how to improve this bot ? Please contact @ragepeanut on any of his posts or send him a direct message on discord (RagePeanut#8078).';
             comments.push([message, author, permlink, 'Commands list']);
             break;
         default:
@@ -355,6 +377,6 @@ function sendMessage(message, author, permlink, title) {
  */
 function addUsers(...encounteredUsers) {
     encounteredUsers.forEach(user => {
-        if(user !== '' && !users[user]) users[user] = { mode: 'regular', ignored: [] };
+        if(user !== '' && !users[user]) users[user] = { mode: 'regular', ignored: [], delay: 0 };
     });
 }
