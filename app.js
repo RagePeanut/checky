@@ -313,7 +313,7 @@ function processCommand(command, author, permlink) {
         case 'delay':
             if(command[2]) {
                 const delay = parseInt(command[2]);
-                if(delay) {
+                if(!Number.isNaN(delay)) {
                     users[author].delay = Math.abs(delay);
                     if(delay > 0 ) comments.push([`The delay has been set to ${ delay } minute${ delay > 1 ? 's' : '' }. @checky will now wait ${ delay } minute${ delay > 1 ? 's' : '' } before checking your mentions.`, author, permlink, `Delay set to ${ delay } minute${ delay > 1 ? 's' : '' }`]);
                     else comments.push([`The delay has been set to ${ delay } minutes. @checky will instantly check your mentions when you post.`, author, permlink, `Delay set to ${ delay } minute${ delay > 1 ? 's' : '' }`])
