@@ -181,7 +181,7 @@ function processPost(body, author, permlink, mustBeNew) {
             steem.api.setOptions({ url: request_nodes[0] });
             console.log(`Retrying with ${ request_nodes[0] }`);
             processPost(body, author, permlink, mustBeNew);
-        } else if(author === 'nuttinghere') {
+        } else {
             if(mustBeNew && res.last_update === res.created) {
                 if(users[author].delay > 0) {
                     setTimeout(() => { 
