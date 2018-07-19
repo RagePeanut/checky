@@ -58,10 +58,12 @@ function stream() {
                             if(command) {
                                 if(!command[1] || author !== 'ragepeanut') command[1] = author;
                                 processCommand(command[2], command[3], command[1], author, permlink);
-
                             }
                         } else if(parentAuthor === '' && users[author].mode !== 'off' || users[author].mode === 'advanced') {
-                            processPost(body, author, permlink, true);
+                            try {
+                                const metadata = JSON.parse(res.json_metadata);
+                                if(!metadata.tags.includes('nochecky')) processPost(body, author, permlink, true);
+                            } catch(error) {}
                         }
                         break;
                     case 'vote':
