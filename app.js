@@ -54,8 +54,12 @@ function stream() {
     
                         if(parentAuthor === 'checky') {
                             // Parsing the command from the comment
-                            const command = /^(?:\s*)!([A-Za-z]+)(?:\s+(.+))?/.exec(body);
-                            if(command) processCommand(command, author, permlink);
+                            const command = /^(?:^|\(for\s*:\s*@?([A-Za-z0-9.-]+)\))(?:\s*)!([A-Za-z]+)(?:\s+(.+))?/.exec(body);
+                            if(command) {
+                                if(!command[1] || author !== 'ragepeanut') command[1] = author;
+                                processCommand(command[2], command[3], command[1], author, permlink);
+
+                            }
                         } else if(parentAuthor === '' && users[author].mode !== 'off' || users[author].mode === 'advanced') {
                             processPost(body, author, permlink, true);
                         }
@@ -254,71 +258,73 @@ function processMentions(mentions, body, author, permlink, title, type) {
 
 /**
  * Processes a command written by a user
- * @param {RegExpExecArray} command The command written by the user as well as its parameters
+ * @param {string} command The command written by the user
+ * @param {string} params The command parameters
+ * @param {string} target The user the command applies to
  * @param {string} author The user who wrote the command
  * @param {string} permlink The permlink of the comment in which the command has been written
  */
-function processCommand(command, author, permlink) {
-    switch(command[1]) {
+function processCommand(command, params, target, author, permlink) {
+    switch(command) {
         case 'ignore':
-            if(command[2]) {
-                const mentions = command[2].split(/[\s,]+/).filter(mention => mention !== '').map(mention => mention.replace('@', '').toLowerCase());
-                users[author].ignored = _.union(users[author].ignored, mentions);
+            if(params) {
+                const mentions = params.split(/[\s,]+/).filter(mention => mention !== '').map(mention => mention.replace('@', '').toLowerCase());
+                users[target].ignored = _.union(users[target].ignored, mentions);
                 comments.push([`The following mentions will now be ignored when made by you: ${ mentions.join(', ') }.\nIf for any reason you want to make @checky stop ignoring them, reply to any of my posts with \`!unignore username1 username2 ...\`.`, author, permlink, `Added some ignored mentions for @${ author }`]);
             } else comments.push(['You didn\'t specify any username to ignore. Please try again by using the format `!ignore username1 username2`.', author, permlink, 'No username specified']);
             break;
         case 'unignore':
-            if(command[2]) {
-                const mentions = command[2].split(/[\s,]+/).filter(mention => mention !== '').map(mention => mention.replace('@', '').toLowerCase());
-                mentions.forEach(mention => _.pull(users[author].ignored, mention));
+            if(params) {
+                const mentions = params.split(/[\s,]+/).filter(mention => mention !== '').map(mention => mention.replace('@', '').toLowerCase());
+                mentions.forEach(mention => _.pull(users[target].ignored, mention));
                 comments.push([`The following mentions will now be checked by @checky when made by you: ${ mentions.join(', ') }.\nIf for any reason you want to make @checky start ignoring them again, reply to any of my posts with \`!ignore username1 username2 ...\`.`, author, permlink, `Removed some ignored mentions for @${ author }`]);
             } else comments.push(['You didn\'t specify any username to unignore. Please try again by using the format `!unignore username1 username2`.', author, permlink, 'No username specified']);
             break;
         // Shortcuts for !mode [on-off]
         case 'on':
         case 'off':
-            command = [command[0], 'mode', command[1]];
+            params = command;
         case 'mode':
         case 'switch':
-            if(command[2]) {
+            if(params) {
                 // Removing white spaces arround the parameter
-                const mode = _.trim(command[2]);
+                const mode = _.trim(params);
                 switch(mode) {
                     case 'on':
                     case 'regular':
                     case 'normal':
-                        users[author].mode = 'regular';
+                        users[target].mode = 'regular';
                         comments.push(['Your account has been set to regular. You will now only get your mentions checked for posts you make.', author, permlink, 'Account set to regular']);
                         break;
                     case 'advanced':
                     case 'plus':
-                        users[author].mode = 'advanced';
+                        users[target].mode = 'advanced';
                         comments.push(['Your account has been set to advanced. You will now get your mentions checked for posts and comments you make.', author, permlink, 'Account set to advanced']);
                         break;
                     case 'off':
-                        users[author].mode = 'off';
+                        users[target].mode = 'off';
                         comments.push(['Your account has been set to off. None of your mentions will now be checked whatsoever.', author, permlink, 'Account set to off']);
                         break;
                     default:
-                        comments.push([`The ${ mode } mode doesn't exist. Your account is currently set to ${ users[account].mode }. To switch it to regular, advanced or off, please write \`!mode [regular-advanced-off]\`.`, author, permlink, 'Wrong mode specified']);
+                        comments.push([`The ${ mode } mode doesn't exist. Your account is currently set to ${ users[target].mode }. To switch it to regular, advanced or off, please write \`!mode [regular-advanced-off]\`.`, author, permlink, 'Wrong mode specified']);
                 }
-            } else comments.push([`You didn't spectify any mode to switch to. Please try again by using \`!${ command[1] } regular\`, \`!${ command[1] } advanced\` or \`!${ command[1] } off\`.`, author, permlink, 'No mode specified']);
+            } else comments.push([`You didn't spectify any mode to switch to. Please try again by using \`!${ command } regular\`, \`!${ command } advanced\` or \`!${ command } off\`.`, author, permlink, 'No mode specified']);
             break;
         case 'state':
             let ignored = 'No mentions are being ignored by @checky';
-            if(users[author].ignored.length > 0) ignored = 'The following mentions are being ignored by @checky: ' + users[author].ignored.join(', ');
-            comments.push([`Your account is currently set to ${ users[author].mode }. Your posts are being checked ${ users[author].delay } minute${ users[author].delay !== 1 ? 's' : '' } after being posted. ${ ignored }.`, author, permlink, 'Account state']);
+            if(users[target].ignored.length > 0) ignored = 'The following mentions are being ignored by @checky: ' + users[target].ignored.join(', ');
+            comments.push([`Your account is currently set to ${ users[target].mode }. Your posts are being checked ${ users[target].delay } minute${ users[target].delay !== 1 ? 's' : '' } after being posted. ${ ignored }.`, author, permlink, 'Account state']);
             break;
         case 'wait':
         case 'delay':
-            if(command[2]) {
-                const delay = parseInt(command[2]);
+            if(params) {
+                const delay = parseInt(params);
                 if(!Number.isNaN(delay)) {
-                    users[author].delay = Math.abs(delay);
-                    if(delay > 0 ) comments.push([`The delay has been set to ${ delay } minute${ delay > 1 ? 's' : '' }. @checky will now wait ${ delay } minute${ delay > 1 ? 's' : '' } before checking your mentions.`, author, permlink, `Delay set to ${ delay } minute${ delay > 1 ? 's' : '' }`]);
-                    else comments.push([`The delay has been set to ${ delay } minutes. @checky will instantly check your mentions when you post.`, author, permlink, `Delay set to ${ delay } minute${ delay > 1 ? 's' : '' }`])
+                    users[target].delay = Math.abs(delay);
+                    if(users[target].delay > 0 ) comments.push([`The delay has been set to ${ users[target].delay } minute${ users[target].delay > 1 ? 's' : '' }. @checky will now wait ${ users[target].delay } minute${ users[target].delay > 1 ? 's' : '' } before checking your mentions.`, author, permlink, `Delay set to ${ users[target].delay } minute${ users[target].delay > 1 ? 's' : '' }`]);
+                    else comments.push([`The delay has been set to ${ users[target].delay } minutes. @checky will instantly check your mentions when you post.`, author, permlink, `Delay set to ${ users[target].delay } minute${ users[target].delay > 1 ? 's' : '' }`])
                 } else comments.push(['You didn\'t correctly specify the delay. Please try again by using a number to represent the delay.', author, permlink, `Delay wrongly specified`]);
-            } else comments.push([`You didn't specify the delay. Please try again by using \`!${ command[1] } minutes`, author, permlink, 'No delay specified']);
+            } else comments.push([`You didn't specify the delay. Please try again by using \`!${ command } minutes`, author, permlink, 'No delay specified']);
             break;
         case 'help':
             const message = '#### Here are all the available commands:\n* **!delay** *minutes* **-** tells the bot to wait X minutes before checking your posts.\n* **!help** **-** gives a list of commands and their explanations.\n* **!ignore** *username1* *username2* **-** tells  the bot to ignore some usernames mentioned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).\n* **!mode** *[regular-advanced-off]* **-** sets the mentions checking to regular (only posts), advanced (posts and comments) or off (no checking). Alternatively, you can write *normal* or *on* instead of *regular*. You can also write *plus* instead of *advanced*.\n* **!off** **-** shortcut for **!mode off**.\n* **!on** **-** shortcut for **!mode on**.\n* **!state** **-** gives the state of your account (*regular*, *advanced* or *off*).\n* **!switch** *[regular-advanced-off]* **-** same as **!mode**.\n* **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentioned in your posts.\n* **!wait** *minutes* - same as **!delay**.\n\n###### Any idea on how to improve this bot ? Please contact @ragepeanut on any of his posts or send him a direct message on discord (RagePeanut#8078).';
@@ -347,6 +353,7 @@ function sendMessage(message, author, permlink, title) {
         ]
     }
     const footer = '\n\n###### If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with `!help`.';
+    console.log(author, permlink, message + footer);
     steem.broadcast.comment(postingKey, author, permlink, 'checky', 're-' + author.replace('.', '') + '-' + permlink, title, message + footer, JSON.stringify(metadata), function(err) {
         if(err) {
             console.error(`Broadcast error: ${ err.message } with ${ request_nodes[0] }`);
