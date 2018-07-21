@@ -1,33 +1,33 @@
 {
-    "name": "checky",
-    "version": "0.0.3",
-    "description": "A bot that checks if mentioned Steem users exist.",
-    "main": "app.js",
-    "scripts": {
-        "start": "node app.js",
-        "dev": "nodemon --exec \"heroku local\" --signal SIGTERM",
-        "test": "echo \"Error: no test specified\" && exit 1"
-    },
-    "keywords": [
-        "bot",
-        "steem",
-        "steemit",
-        "mention",
-        "checker"
-    ],
-    "author": "RagePeanut",
-    "license": "MIT",
-    "dependencies": {
-        "lodash": "^4.17.10",
-        "steem": "^0.7.1"
-    },
-    "devDependencies": {},
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/RagePeanut/checky.git"
-    },
-    "bugs": {
-        "url": "https://github.com/RagePeanut/checky/issues"
-    },
-    "homepage": "https://github.com/RagePeanut/checky#readme"
+  "name": "checky",
+  "version": "0.0.4",
+  "description": "A bot that checks if mentioned Steem users exist.",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon --exec \"heroku local\" --signal SIGTERM",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "bot",
+    "steem",
+    "steemit",
+    "mention",
+    "checker"
+  ],
+  "author": "RagePeanut",
+  "license": "MIT",
+  "dependencies": {
+    "lodash": "^4.17.10",
+    "steem": "^0.7.1"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RagePeanut/checky.git"
+  },
+  "bugs": {
+    "url": "https://github.com/RagePeanut/checky/issues"
+  },
+  "homepage": "https://github.com/RagePeanut/checky#readme"
 }

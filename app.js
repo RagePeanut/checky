@@ -61,8 +61,8 @@ function stream() {
                             }
                         } else if(parentAuthor === '' && users[author].mode !== 'off' || users[author].mode === 'advanced') {
                             try {
-                                const metadata = JSON.parse(res.json_metadata);
-                                if(!metadata.tags.includes('nochecky')) processPost(body, author, permlink, true);
+                                const metadata = JSON.parse(operation[1].json_metadata);
+                                if(!metadata.tags.includes('nochecky')) processPost(author, permlink, true);
                             } catch(error) {}
                         }
                         break;
@@ -173,12 +173,11 @@ function stream() {
 
 /**
  * Checks that the comment operation is for a new post and calls processMentions
- * @param {string} body The body of the post
  * @param {string} author The author of the post
  * @param {string} permlink The permlink of the post
  * @param {boolean} mustBeNew Post must be new (true) or can have been updated (false)
  */
-function processPost(body, author, permlink, mustBeNew) {
+function processPost(author, permlink, mustBeNew) {
     steem.api.getContent(author, permlink, (err, res) => {
         if(err) {
             console.error(`Request error (getContent): ${ err.message } with ${ request_nodes[0] }`);
@@ -186,82 +185,89 @@ function processPost(body, author, permlink, mustBeNew) {
             request_nodes.push(request_nodes.shift());
             steem.api.setOptions({ url: request_nodes[0] });
             console.log(`Retrying with ${ request_nodes[0] }`);
-            processPost(body, author, permlink, mustBeNew);
+            processPost(author, permlink, mustBeNew);
         } else {
             if(mustBeNew && res.last_update === res.created) {
                 if(users[author].delay > 0) {
                     setTimeout(() => { 
-                        processPost(body, author, permlink, false);
+                        processPost(author, permlink, false);
                     }, users[author].delay * 60 * 1000);
                 } else mustBeNew = false;
             }
-            if(!mustBeNew) {
-                try {
-                    const metadata = JSON.parse(res.json_metadata);
-                    // Removing the punctuation at the end of some mentions, lower casing mentions, removing duplicates and already encountered existing users
-                    let mentions = _.uniq(metadata.users.map(user => user.replace(/[?¿!¡.,;:-]+$/, '').toLowerCase())).filter(user => user.length > 2 && !users[user]);
-                    // Removing all variations of the author username
-                    const authorRegex = new RegExp(author.replace(/([a-z]+|\d+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
-                    mentions = mentions.filter(mention => {
-                        return mention.match(authorRegex).every(match => match === undefined || match === '');
-                    });
-                    // Removing ignored mentions
-                    if(users[author].ignored.length > 0) mentions = mentions.filter(mention => !users[author].ignored.includes(mention));
-                    if(mentions.length > 0) processMentions(mentions, body, author, permlink, res.title, res.parent_author === '' ? 'post' : 'comment');
-                } catch(err) {}
-            }
+            if(!mustBeNew) processMentions(res.body, author, permlink, res.title, res.parent_author === '' ? 'post' : 'comment');
         }
     });
 }
 
 /**
- * Filters out all the correct mentions from an array of possibly wrong mentions and pushes a comment to the comments array if necessary
- * @param {string[]} mentions All the possibly wrong mentions
+ * Finds all the wrong mentions in the body of a post and calls sendMessage if it finds any
  * @param {string} body The body of the post (used for social network checking)
  * @param {string} author The author of the post
  * @param {string} permlink The permlink of the post
  * @param {string} title The title of the post
  * @param {string} type The type of the post (post or comment)
+ * @param {string[]} mentions An array of already found mentions
  */
-function processMentions(mentions, body, author, permlink, title, type) {
-    steem.api.lookupAccountNames(mentions, (err, res) => {
-        if(err) {
-            console.error(`Request error (lookupAccountNames): ${ err.message } with ${ request_nodes[0] }`);
-            // Putting the node where the error comes from at the end of the array
-            request_nodes.push(request_nodes.shift());
-            steem.api.setOptions({ url: request_nodes[0] });
-            console.log(`Retrying with ${ request_nodes[0] }`);
-            processMentions(mentions, body, author, permlink, title, type);
-        } else {
-            let wrongMentions = [];
-            // Adding each username that got a null result from the API (meaning the user doesn't exist) to the wrongMentions array
-            for(let i = 0; i < mentions.length; i++) {
-                if(res[i] === null) {
-                    // Adding the username to the wrongMentions array only if it doesn't contain a social network reference in the ~600 characters surrounding it
-                    const regex = new RegExp('(?:^|[\\s\\S]{0,299}[^\\w/=-])@' + _.escapeRegExp(mentions[i]) + '(?:[^\\w/-][\\s\\S]{0,299}|$)', 'gi');
-                    const match = body.match(regex);
-                    if(match && !/(insta|tele)gram|tw(it?ter|eet)|golos|discord|medium|brunch|텔레그램/i.test(match)) wrongMentions.push('@' + mentions[i]);
-                } else addUsers(mentions[i]);
-            }
-            // Sending a message if any wrong mention has been found in the post/comment
-            if(wrongMentions.length > 0) {
-                let message = `Hi @${ author }, I'm @checky ! While checking the mentions made in this ${ type } I found out that `;
-                if(wrongMentions.length > 1) {
-                    wrongMentions = wrongMentions.map(mention => mention + ',');
-                    wrongMentions[wrongMentions.length-1] = wrongMentions[wrongMentions.length-1].replace(',', '');
-                    wrongMentions[wrongMentions.length-2] = wrongMentions[wrongMentions.length-2].replace(',', ' and');
-                    message += `${ wrongMentions.join(' ') } don't exist on Steem. Maybe you made some typos ?`;
-                } else message += `${ wrongMentions[0] } doesn't exist on Steem. Maybe you made a typo ?`;
-                comments.push([message, author, permlink, 'Possible wrong mentions found in ' + title]);
-            }
+function processMentions(body, author, permlink, title, type, mentions) {
+    if(!mentions) {
+        const regex = /(?:^|[^\w=/])@([a-z\d.-]{2,17}[a-z\d])(.|$)/gmi;
+        let matches = [];
+        mentions = [];
+        while(matches = regex.exec(body)) {
+            if(!/[_/(]/.test(matches[2])) mentions.push(matches[1].toLowerCase());
         }
-    });
+        // Removing duplicates and already encountered users
+        mentions = _.uniq(mentions).filter(mention => !users[mention]);
+        // Removing all variations of the author username
+        const authorRegex = new RegExp(author.replace(/([a-z]+|\d+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
+        mentions = mentions.filter(mention => {
+            return mention.match(authorRegex).every(match => match === undefined || match === '');
+        });
+        // Removing images and popular domain extensions
+        mentions = mentions.filter(mention => !/\.(jpe?g|png|gif|com?|io|org|net)$/.test(mention));
+        // Removing ignored mentions
+        if(users[author].ignored.length > 0) mentions = mentions.filter(mention => !users[author].ignored.includes(mention));
+    }
+    // console.log(mentions);
+    if(mentions.length > 0) {
+        steem.api.lookupAccountNames(mentions, (err, res) => {
+            if(err) {
+                console.error(`Request error (lookupAccountNames): ${ err.message } with ${ request_nodes[0] }`);
+                // Putting the node where the error comes from at the end of the array
+                request_nodes.push(request_nodes.shift());
+                steem.api.setOptions({ url: request_nodes[0] });
+                console.log(`Retrying with ${ request_nodes[0] }`);
+                processMentions(body, author, permlink, title, type, mentions);
+            } else {
+                let wrongMentions = [];
+                // Adding each username that got a null result from the API (meaning the user doesn't exist) to the wrongMentions array
+                for(let i = 0; i < mentions.length; i++) {
+                    if(res[i] === null) {
+                        // Adding the username to the wrongMentions array only if it doesn't contain a social network reference in the 40 words surrounding it
+                        const match = body.match(new RegExp('(?:\\S+\\s+){0,19}\\S*@' + _.escapeRegExp(mentions[i]) + '\\S*(?:\\s+\\S+){0,19}', 'i'));
+                        if(match && !/(insta|tele)gram|tw(it?ter|eet)|facebook|golos|discord|medium|minds|brunch|텔레그램|[^a-z](ig|rt|fb)[^a-z]|\/t.me\//i.test(match)) wrongMentions.push('@' + mentions[i]);
+                    } else addUsers(mentions[i]);
+                }
+                // Sending a message if any wrong mention has been found in the post/comment
+                if(wrongMentions.length > 0) {
+                    let message = `Hi @${ author }, I'm @checky ! While checking the mentions made in this ${ type } I found out that `;
+                    if(wrongMentions.length > 1) {
+                        wrongMentions = wrongMentions.map(mention => mention + ',');
+                        wrongMentions[wrongMentions.length-1] = wrongMentions[wrongMentions.length-1].replace(',', '');
+                        wrongMentions[wrongMentions.length-2] = wrongMentions[wrongMentions.length-2].replace(',', ' and');
+                        message += `${ wrongMentions.join(' ') } don't exist on Steem. Maybe you made some typos ?`;
+                    } else message += `${ wrongMentions[0] } doesn't exist on Steem. Maybe you made a typo ?`;
+                    comments.push([message, author, permlink, 'Possible wrong mentions found in ' + title]);
+                }
+            }
+        });
+    }
 }
 
 /**
  * Processes a command written by a user
  * @param {string} command The command written by the user
- * @param {string} params The command parameters
+ * @param {string} params The command's parameters
  * @param {string} target The user the command applies to
  * @param {string} author The user who wrote the command
  * @param {string} permlink The permlink of the comment in which the command has been written
@@ -331,7 +337,7 @@ function processCommand(command, params, target, author, permlink) {
                 } else comments.push([`You didn't specify the delay. Please try again by using \`!${ command } minutes`, author, permlink, 'No delay specified']);
                 break;
             case 'help':
-                const message = '#### Here are all the available commands:\n* **!delay** *minutes* **-** tells the bot to wait X minutes before checking your posts.\n* **!help** **-** gives a list of commands and their explanations.\n* **!ignore** *username1* *username2* **-** tells  the bot to ignore some usernames mentioned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).\n* **!mode** *[regular-advanced-off]* **-** sets the mentions checking to regular (only posts), advanced (posts and comments) or off (no checking). Alternatively, you can write *normal* or *on* instead of *regular*. You can also write *plus* instead of *advanced*.\n* **!off** **-** shortcut for **!mode off**.\n* **!on** **-** shortcut for **!mode on**.\n* **!state** **-** gives the state of your account (*regular*, *advanced* or *off*).\n* **!switch** *[regular-advanced-off]* **-** same as **!mode**.\n* **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentioned in your posts.\n* **!wait** *minutes* - same as **!delay**.\n\n###### Any idea on how to improve this bot ? Please contact @ragepeanut on any of his posts or send him a direct message on discord (RagePeanut#8078).';
+                const message = '#### Here are all the available commands:\n* **!delay** *minutes* **-** tells the bot to wait X minutes before checking your posts.\n* **!help** **-** gives a list of commands and their explanations.\n* **!ignore** *username1* *username2* **-** tells  the bot to ignore some usernames mentioned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).\n* **!mode** *[regular-advanced-off]* **-** sets the mentions checking to regular (only posts), advanced (posts and comments) or off (no checking). Alternatively, you can write *normal* or *on* instead of *regular*. You can also write *plus* instead of *advanced*.\n* **!off** **-** shortcut for **!mode off**.\n* **!on** **-** shortcut for **!mode on**.\n* **!state** **-** gives the state of your account (*regular*, *advanced* or *off*).\n* **!switch** *[regular-advanced-off]* **-** same as **!mode**.\n* **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentioned in your posts.\n* **!wait** *minutes* - same as **!delay**.\n\n###### Any idea on how to improve this bot ? Please contact @ragepeanut on any of his posts or send him a direct message on Discord (RagePeanut#8078).';
                 comments.push([message, author, permlink, 'Commands list']);
                 break;
             default:
@@ -349,7 +355,7 @@ function processCommand(command, params, target, author, permlink) {
  */
 function sendMessage(message, author, permlink, title) {
     const metadata = {
-        app: 'checky/0.0.2',
+        app: 'checky/0.0.4',
         format: 'markdown',
         tags: [ 
             'mentions',
