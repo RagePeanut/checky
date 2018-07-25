@@ -1,5 +1,5 @@
-# checky (0.0.2)
-A Steem bot that checks if the users mentioned in a post exist on the blockchain. If they don't, it indicates to authors that they may have made a typo while mentioning those users. 
+# checky (0.1.0)
+A Steem bot that checks if the users mentioned in a post exist on the blockchain. If they don't, it indicates to authors that they may have made a typo or it suggests them some existing usernames close to the wrong ones.
 
 See this bot in action here: https://steemit.com/@checky/comments
 
@@ -25,12 +25,16 @@ If none of the default nodes work, you can change them in the **config.json** fi
 
 ## Commands
 The following commands must be typed in reply to one of [@checky](https://steemit.com/@checky)'s posts or comments to work.
+* **!delay** *minutes* **-** tells the bot to wait X minutes before checking your posts.
 * **!help** **-** gives a list of commands and their explanations.
-* **!ignore** *username1* *username2* **-** tells  the bot to ignore some usernames mentionned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).
+* **!ignore** *username1* *username2* **-** tells  the bot to ignore some usernames mentioned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).
 * **!mode** *[regular-advanced-off]* **-** sets the mentions checking to regular (only posts), advanced (posts and comments) or off (no checking). Alternatively, you can write *normal* or *on* instead of *regular*. You can also write *plus* instead of *advanced*.
+* **!off -** shortcut for **!mode off**.
+* **!on -** shortcut for **!mode on**.
 * **!state** **-** gives the state of your account (*regular*, *advanced* or *off*).
 * **!switch** *[regular-advanced-off]* **-** same as **!mode**.
-* **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentionned in your posts.
+* **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentioned in your posts.
+* **!wait** *minutes* **-** same as **!delay**.
 
 ## Social networks
 **Steemit:** https://steemit.com/@ragepeanut <br>
