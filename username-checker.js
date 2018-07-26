@@ -24,6 +24,18 @@ function addIgnored(author, usernames) {
 }
 
 /**
+ * Adds usernames to the list of mentions made by an author over time
+ * @param {string} author The author
+ * @param {string[]} usernames The usernames mentioned by the author
+ */
+function addMentioned(author, usernames) {
+    usernames.forEach(username => {
+        if(!users[author].mentioned.includes(username)) users[author].mentioned.push(username);
+        users[username].occurrences++;
+    });
+}
+
+/**
  * Adds users to the users object if not encountered before
  * @param {string} origin The account the operation originates from
  * @param {string[]} usernames The usernames encountered while reading the operation
@@ -33,7 +45,7 @@ function addUsers(origin, ...usernames) {
     usernames.forEach(username => {
         if(username !== '') {
             if(!users[username]) {
-                users[username] = { mode: 'regular', ignored: [], delay: 0, occurrences: 0 };
+                users[username] = { mode: 'regular', ignored: [], delay: 0, occurrences: 0, mentioned: [] };
             }
         }
     });
@@ -65,7 +77,7 @@ function correct(username, author, otherMentions) {
         if(suggestions.length > 0) {
             if(suggestions.length === 1) return suggestions[0];
             // Trying to find the better suggestion based on the mentions made by the author in the post and, if needed, in his previous posts
-            suggestion = suggestions.find(mention => otherMentions.includes(mention));
+            suggestion = suggestions.find(mention => otherMentions.includes(mention) || users[author].mentioned.includes(mention));
             if(suggestion) return resolve(suggestion);
             // Suggesting the most mentioned username overall
             return resolve(suggestions.sort((a, b) => users[b].occurrences - users[a].occurrences)[0]);
@@ -220,6 +232,7 @@ function setMode(username, mode) {
 
 module.exports = {
     addIgnored,
+    addMentioned,
     addUsers,
     correct,
     getUser,

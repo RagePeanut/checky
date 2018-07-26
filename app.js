@@ -281,6 +281,7 @@ function processMentions(body, author, permlink, title, type, mentions) {
             }
         });
     }
+    usernameChecker.addMentioned(author, knownUsernames);
 }
 
 /**
