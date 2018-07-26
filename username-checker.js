@@ -80,7 +80,7 @@ function correct(username, author, otherMentions) {
             suggestion = suggestions.find(mention => otherMentions.includes(mention) || users[author].mentioned.includes(mention));
             if(suggestion) return resolve(suggestion);
             // Suggesting the most mentioned username overall
-            return resolve(suggestions.sort((a, b) => users[a].occurrences - users[b].occurrences)[0]);
+            return resolve(suggestions.sort((a, b) => users[b].occurrences - users[a].occurrences)[0]);
         // No suggestion
         } else return resolve(null);
     });
