@@ -245,7 +245,7 @@ function processMentions(body, author, permlink, title, type, mentions) {
                 for(let i = 0; i < mentions.length; i++) {
                     if(res[i] === null) {
                         // Adding the username to the wrongMentions array only if it doesn't contain a social network reference in the 40 words surrounding it
-                        const match = body.match(new RegExp('(?:\\S+\\s+){0,20}\\S*@' + _.escapeRegExp(mentions[i]) + '\\S*(?:\\s+\\S+){0,20}', 'i'));
+                        const match = body.match(new RegExp('(?:\\S+\\s+){0,20}\\S*@' + _.escapeRegExp(mentions[i]) + '(?:[^a-z\d]\\S*(?:\\s+\\S+){0,20}|$)', 'i'));
                         if(match && !/(insta|tele)gram|tw(it?ter|eet)|facebook|golos|discord|medium|minds|brunch|텔레그램|[^a-z](ig|rt|fb|eos|t.(me|co)\/)[^a-z]/i.test(match[0])) wrongMentions.push(mentions[i]);
                     } else {
                         usernameChecker.addUsers(author, mentions[i]);
