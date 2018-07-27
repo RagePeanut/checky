@@ -374,6 +374,7 @@ function processCommand(command, params, target, author, permlink) {
  * @param {string} title The title of the message to broadcast
  */
 function sendMessage(message, author, permlink, title) {
+    if(title.length > 256) title = title.slice(0, 253) + '...';
     const metadata = {
         app: 'checky/0.1.0',
         format: 'markdown',
