@@ -246,7 +246,7 @@ function processMentions(body, author, permlink, title, type, mentions) {
                     if(res[i] === null) {
                         // Adding the username to the wrongMentions array only if it doesn't contain a social network reference in the 40 words surrounding it
                         const match = body.match(new RegExp('(?:\\S+\\s+){0,20}\\S*@' + _.escapeRegExp(mentions[i]) + '(?:[^a-z\d]\\S*(?:\\s+\\S+){0,20}|$)', 'i'));
-                        if(match && !/(insta|tele)gram|tw(it?ter|eet)|facebook|golos|discord|medium|minds|brunch|텔레그램|[^a-z](ig|rt|fb|eos|t.(me|co)\/)[^a-z]/i.test(match[0])) wrongMentions.push(mentions[i]);
+                        if(match && !/(insta|tele)gram|tw(it?ter|eet)|facebook|golos|discord|medium|minds|brunch|텔레그램|[^a-z](ig|rt|fb|eos)[^a-z]|t.(me|co)\//i.test(match[0])) wrongMentions.push(mentions[i]);
                     } else {
                         usernameChecker.addUsers(author, mentions[i]);
                         knownUsernames.push(mentions[i]);
@@ -374,7 +374,7 @@ function processCommand(command, params, target, author, permlink) {
  * @param {string} title The title of the message to broadcast
  */
 function sendMessage(message, author, permlink, title) {
-    if(title.length > 256) title = title.slice(0, 253) + '...';
+    if(title.length > 255) title = title.slice(0, 252) + '...';
     const metadata = {
         app: 'checky/0.1.0',
         format: 'markdown',
