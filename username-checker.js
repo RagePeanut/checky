@@ -57,16 +57,20 @@ function addUsers(origin, ...usernames) {
  * @param {string} author The author of the post
  * @param {string[]} otherMentions The correct mentions made in the post
  * @returns {string} A correct username close to the wrong one, returns null if no username is found
+ * @todo Use steem.api.lookupAccountNames to refine the guess
  */
 function correct(username, author, otherMentions) {
     return new Promise((resolve) => {
         // Adding `author` to `otherMentions` to avoid repeating the same testing code twice
         if(!otherMentions.includes(author)) otherMentions.unshift(author);
         // Testing for username variations
+        const usernameNoPunct = username.replace(/[\d.-]/g, '');
         let suggestion = otherMentions.find(mention => {
-            return username.replace(/[\d.-]/g, '') === mention.replace(/[\d.-]/g, '');
+            const mentionNoPunct = mention.replace(/[\d.-]/g, '');
+            return usernameNoPunct === mentionNoPunct || 'the' + usernameNoPunct === mentionNoPunct;
         });
         if(suggestion) return resolve(suggestion);
+        if(isKnown('the' + username)) return resolve('the' + username);
         // Testing for usernames that are one edit away from the wrong username
         const edits = edits1(username);
         let suggestions = edits.filter(edit => isKnown(edit));

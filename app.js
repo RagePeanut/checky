@@ -185,7 +185,7 @@ function processPost(author, permlink, mustBeNew) {
                     }, delay * 60 * 1000);
                 } else mustBeNew = false;
             }
-            if(!mustBeNew) processMentions(res.body, author, permlink, res.title, res.parent_author === '' ? 'post' : 'comment');
+            if(!mustBeNew) processMentions(res.body, author, permlink, res.parent_author === '' ? 'post' : 'comment');
         }
     });
 }
@@ -195,17 +195,18 @@ function processPost(author, permlink, mustBeNew) {
  * @param {string} body The body of the post (used for social network checking)
  * @param {string} author The author of the post
  * @param {string} permlink The permlink of the post
- * @param {string} title The title of the post
  * @param {string} type The type of the post (post or comment)
- * @param {string[]} mentions An array of already found mentions (optional)
+ * @param {string[]} [mentions] An array of already found mentions
+ * @todo Ignore mentions in code blocks
+ * @todo Ignore mentions in quotes
  */
-function processMentions(body, author, permlink, title, type, mentions) {
+function processMentions(body, author, permlink, type, mentions) {
     const knownUsernames = [];
     if(!mentions) {
-        const regex = /(?:^|[^\w=/])@([a-z][a-z\d.-]{1,16}[a-z\d])(.|$)/gimu;
+        const mentionRegex = /(?:^|[^\w=/])@([a-z][a-z\d.-]{1,16}[a-z\d])(.|$)/gimu;
         let matches = [];
         mentions = [];
-        while(matches = regex.exec(body)) {
+        while(matches = mentionRegex.exec(body)) {
             if(!/[\w/(]/.test(matches[2])) {
                 // Pushing mentions, if they contain adjacent dots --> pushing only the part before those dots
                 mentions.push(matches[1].split(/\.{2,}/)[0].toLowerCase());
@@ -238,7 +239,7 @@ function processMentions(body, author, permlink, title, type, mentions) {
                 request_nodes.push(request_nodes.shift());
                 steem.api.setOptions({ url: request_nodes[0] });
                 console.log(`Retrying with ${ request_nodes[0] }`);
-                processMentions(body, author, permlink, title, type, mentions);
+                processMentions(body, author, permlink, type, mentions);
             } else {
                 let wrongMentions = [];
                 // Adding each username that got a null result from the API (meaning the user doesn't exist) to the wrongMentions array
@@ -275,7 +276,7 @@ function processMentions(body, author, permlink, title, type, mentions) {
                                     }
                                     message += ` and @${ wrongMentions[wrongMentions.length - 1]} don't exist on Steem. ${ lastSentence } ?`;
                                 } else message += ` doesn't exist on Steem. ${ suggestions[0] ? 'Did you mean to write @<em></em>' + suggestions[0] : 'Maybe you made a typo' } ?`;
-                                comments.push([message, author, permlink, 'Possible wrong mentions found in ' + title]);
+                                comments.push([message, author, permlink, 'Possible wrong mentions found']);
                            });
                 }
             }
