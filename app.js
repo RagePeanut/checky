@@ -3,6 +3,7 @@ const steem = require('steem');
 const steemStream = require('steem');
 const usernameChecker = require('./username-checker');
 const { request_nodes, stream_nodes } = require('./config');
+const { version } = require('./package');
 
 const postingKey = process.env.CHECKY_POSTING_KEY;
 
@@ -207,7 +208,10 @@ function processMentions(body, author, permlink, type, mentions) {
         let matches = [];
         mentions = [];
         while(matches = mentionRegex.exec(body)) {
-            if(!/[\w/(]/.test(matches[2])) {
+            const escapedMention = matches[1].replace('.', '\.');
+            const mentionInQuote = new RegExp('^> *.*@' + escapedMention + '.*|<blockquote( +cite="[^"]+")?>((?!<blockquote)[\\s\\S])*@' + escapedMention + '((?!<blockquote)[\\s\\S])*<\\/blockquote>', 'iu').test(body);
+            const mentionInCode = new RegExp('```[\\s\\S]*@' + escapedMention + '[\\s\\S]*```|`[^`\\r\\n\\f\\v]*@' + escapedMention + '[^`\\r\\n\\f\\v]*`|<code>[\\s\\S]*@' + escapedMention + '[\\s\\S]*<\\/code>', 'iu').test(body);
+            if(!/[\w/(]/.test(matches[2]) && !mentionInCode && !mentionInQuote) {
                 // Pushing mentions, if they contain adjacent dots --> pushing only the part before those dots
                 mentions.push(matches[1].split(/\.{2,}/)[0].toLowerCase());
             }
@@ -377,7 +381,7 @@ function processCommand(command, params, target, author, permlink) {
 function sendMessage(message, author, permlink, title) {
     if(title.length > 255) title = title.slice(0, 252) + '...';
     const metadata = {
-        app: 'checky/0.1.0',
+        app: 'checky/' + version,
         format: 'markdown',
         tags: [ 
             'mentions',
