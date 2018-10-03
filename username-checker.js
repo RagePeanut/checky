@@ -1,5 +1,9 @@
 const _ = require('lodash');
 const fs = require('fs');
+const steem = require('steem');
+const { request_nodes } = require('./config');
+
+steem.api.setOptions({ url: request_nodes[0] });
 
 // Creating a users object and updating it with the content of ./data/users.json if the file exists 
 let users = {};
@@ -13,7 +17,7 @@ setInterval(() => {
         if(err) console.error(err.message);
     });
 }, 5 * 1000);
-
+isknown
 /**
  * Adds usernames to an author's ignored mentions
  * @param {string} author The author
@@ -56,10 +60,9 @@ function addUsers(origin, ...usernames) {
  * @param {string} username The username to be corrected
  * @param {string} author The author of the post
  * @param {string[]} otherMentions The correct mentions made in the post
- * @returns {string} A correct username close to the wrong one, returns null if no username is found
- * @todo Use steem.api.lookupAccountNames to refine the guess
+ * @returns {Promise} A correct username close to the wrong one, returns null if no username is found
  */
-function correct(username, author, otherMentions) {
+async function correct(username, author, otherMentions) {
     return new Promise((resolve) => {
         // Adding `author` to `otherMentions` to avoid repeating the same testing code twice
         if(!otherMentions.includes(author)) otherMentions.unshift(author);
@@ -70,13 +73,14 @@ function correct(username, author, otherMentions) {
             return usernameNoPunct === mentionNoPunct || 'the' + usernameNoPunct === mentionNoPunct;
         });
         if(suggestion) return resolve(suggestion);
-        if(isKnown('the' + username)) return resolve('the' + username);
+        if(await exists('the' + username)) return resolve('the' + username);
         // Testing for usernames that are one edit away from the wrong username
         const edits = edits1(username);
-        let suggestions = edits.filter(edit => isKnown(edit));
+        let suggestions = await getExisting(edits);
         if(suggestions.length === 0) {
             // Testing for usernames that are two edits away from the wrong username
-            suggestions = edits2(edits).filter(edit => isKnown(edit));
+            const edits2 = edits2(edits);
+            suggestions = await getExisting(edits2);
         }
         if(suggestions.length > 0) {
             if(suggestions.length === 1) return suggestions[0];
@@ -194,12 +198,35 @@ function getUser(username) {
 }
 
 /**
- * Returns whether or not a user is known
+ * Returns whether or not a username is known
  * @param {string} username The username
- * @returns {boolean} Whether or not the user is known
+ * @returns {Promise} Whether or not the username exists on the Steem blockchain
  */
-function isKnown(username) {
-    return users.hasOwnProperty(username); 
+async function exists(username) {
+    return (await getExisting([username])).length === 1;
+}
+
+/**
+ * Returns the received usernames that are known
+ * @param {string[]} usernames The usernames
+ * @returns {Promise} The usernames that exist on the Steem blockchain
+ */
+async function getExisting(usernames) {
+    const existing = [];
+    const toCheck = [];
+    return new Promise(resolve => {
+        usernames.forEach(username => {
+            if(users.hasOwnProperty(username)) existing.push(username);
+            else toCheck.push(username);
+        });
+        if(toCheck.length === 0) return resolve(usernames);
+        steem.api.lookupAccountNames(toCheck, (err, res) => {
+            if(err) return resolve(existing.concat(await getExisting(toCheck)));
+            const discovered = res.filter(username => username);
+            discovered.forEach(username => addUsers(null, username));
+            return resolve(existing.concat(discovered));
+        });
+    });
 }
 
 /**
@@ -239,8 +266,8 @@ module.exports = {
     addMentioned,
     addUsers,
     correct,
+    exists,
     getUser,
-    isKnown,
     removeIgnored,
     setDelay,
     setMode

@@ -198,10 +198,8 @@ function processPost(author, permlink, mustBeNew) {
  * @param {string} permlink The permlink of the post
  * @param {string} type The type of the post (post or comment)
  * @param {string[]} [mentions] An array of already found mentions
- * @todo Ignore mentions in code blocks
- * @todo Ignore mentions in quotes
  */
-function processMentions(body, author, permlink, type, mentions) {
+async function processMentions(body, author, permlink, type, mentions) {
     const knownUsernames = [];
     if(!mentions) {
         const mentionRegex = /(?:^|[^\w=/])@([a-z][a-z\d.-]{1,16}[a-z\d])(.|$)/gimu;
@@ -218,7 +216,7 @@ function processMentions(body, author, permlink, type, mentions) {
         }
         // Removing duplicates and already encountered users
         mentions = _.uniq(mentions).filter(mention => {
-            if(usernameChecker.isKnown(mention)) {
+            if(await usernameChecker.exists(mention)) {
                 if(mention !== author) knownUsernames.push(mention);
                 return false;
             }
@@ -297,8 +295,8 @@ function processMentions(body, author, permlink, type, mentions) {
  * @param {string} author The user who wrote the command
  * @param {string} permlink The permlink of the comment in which the command has been written
  */
-function processCommand(command, params, target, author, permlink) {
-    if(!usernameChecker.isKnown(target)) comments.push(['The target user doesn\'t exist on the Steem blockchain. Maybe you made a typo ?', author, permlink, 'Possible wrong target username']);
+async function processCommand(command, params, target, author, permlink) {
+    if(!(await usernameChecker.exists(target))) comments.push(['The target user doesn\'t exist on the Steem blockchain. Maybe you made a typo ?', author, permlink, 'Possible wrong target username']);
     else {
         const targetData = usernameChecker.getUser(target);
         switch(command) {
