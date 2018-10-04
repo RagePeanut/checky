@@ -17,7 +17,7 @@ setInterval(() => {
         if(err) console.error(err.message);
     });
 }, 5 * 1000);
-isknown
+
 /**
  * Adds usernames to an author's ignored mentions
  * @param {string} author The author
@@ -42,15 +42,14 @@ function addMentioned(author, usernames) {
 /**
  * Adds users to the users object if not encountered before
  * @param {string} origin The account the operation originates from
- * @param {string[]} usernames The usernames encountered while reading the operation
+ * @param {string[]|string[][]} usernames The usernames encountered while reading the operation
  */
 function addUsers(origin, ...usernames) {
     if(origin) addUsers(null, origin);
+    if(usernames.length > 0 && typeof usernames[0] === 'object') usernames = usernames[0];
     usernames.forEach(username => {
-        if(username !== '') {
-            if(!users[username]) {
-                users[username] = { mode: 'regular', ignored: [], delay: 0, occurrences: 0, mentioned: [] };
-            }
+        if(username !== '' && !users.hasOwnProperty(username)) {
+            users[username] = { mode: 'regular', ignored: [], delay: 0, occurrences: 0, mentioned: [] };
         }
     });
 }
@@ -60,10 +59,10 @@ function addUsers(origin, ...usernames) {
  * @param {string} username The username to be corrected
  * @param {string} author The author of the post
  * @param {string[]} otherMentions The correct mentions made in the post
- * @returns {Promise} A correct username close to the wrong one, returns null if no username is found
+ * @returns {Promise<string>} A correct username close to the wrong one, returns null if no username is found
  */
-async function correct(username, author, otherMentions) {
-    return new Promise((resolve) => {
+function correct(username, author, otherMentions) {
+    return new Promise(async resolve => {
         // Adding `author` to `otherMentions` to avoid repeating the same testing code twice
         if(!otherMentions.includes(author)) otherMentions.unshift(author);
         // Testing for username variations
@@ -75,15 +74,15 @@ async function correct(username, author, otherMentions) {
         if(suggestion) return resolve(suggestion);
         if(await exists('the' + username)) return resolve('the' + username);
         // Testing for usernames that are one edit away from the wrong username
-        const edits = edits1(username);
-        let suggestions = await getExisting(edits);
+        const ed1 = edits1(username);
+        let suggestions = _.uniq(await getExisting(ed1));
         if(suggestions.length === 0) {
             // Testing for usernames that are two edits away from the wrong username
-            const edits2 = edits2(edits);
-            suggestions = await getExisting(edits2);
+            const ed2 = edits2(ed1);
+            suggestions = _.uniq(await getExisting(ed2));
         }
         if(suggestions.length > 0) {
-            if(suggestions.length === 1) return suggestions[0];
+            if(suggestions.length === 1) return resolve(suggestions[0]);
             // Trying to find the better suggestion based on the mentions made by the author in the post and, if needed, in his previous posts
             suggestion = suggestions.find(mention => otherMentions.includes(mention) || users[author].mentioned.includes(mention));
             if(suggestion) return resolve(suggestion);
@@ -200,7 +199,7 @@ function getUser(username) {
 /**
  * Returns whether or not a username is known
  * @param {string} username The username
- * @returns {Promise} Whether or not the username exists on the Steem blockchain
+ * @returns {Promise<boolean>} Whether or not the username exists on the Steem blockchain
  */
 async function exists(username) {
     return (await getExisting([username])).length === 1;
@@ -209,10 +208,10 @@ async function exists(username) {
 /**
  * Returns the received usernames that are known
  * @param {string[]} usernames The usernames
- * @returns {Promise} The usernames that exist on the Steem blockchain
+ * @returns {Promise<string[]>} The usernames that exist on the Steem blockchain
  */
-async function getExisting(usernames) {
-    const existing = [];
+function getExisting(usernames) {
+    let existing = [];
     const toCheck = [];
     return new Promise(resolve => {
         usernames.forEach(username => {
@@ -220,11 +219,34 @@ async function getExisting(usernames) {
             else toCheck.push(username);
         });
         if(toCheck.length === 0) return resolve(usernames);
-        steem.api.lookupAccountNames(toCheck, (err, res) => {
-            if(err) return resolve(existing.concat(await getExisting(toCheck)));
-            const discovered = res.filter(username => username);
-            discovered.forEach(username => addUsers(null, username));
-            return resolve(existing.concat(discovered));
+        const promises = [];
+        for(let i = 0; i < toCheck.length; i += 10000) {
+            promises.push(getDiscovered(toCheck.slice(i, i + 10000)))
+        }
+        Promise.all(promises)
+               .then(discovered => {
+                   for(let i = 0; i < discovered.length; i++) {
+                       for(let j = 0; j < discovered[i].length; j++) {
+                           existing.push(discovered[i][j]);
+                       }
+                   }
+                   return resolve(existing);
+               });
+    });
+}
+
+/**
+ * Returns the received usernames that exist on the Steem blockchain
+ * @param {string[]} usernames An array of usernames that may exist on the blockchain
+ * @return {Promise<string[]>} The usernames from the received list that exist on the blockchain
+ */
+function getDiscovered(usernames) {
+    return new Promise(resolve => {
+        steem.api.lookupAccountNames(usernames, async (err, res) => {
+            if(err) return resolve(await getDiscovered(usernames));
+            const discovered = res.filter(user => user).map(user => user.name);
+            addUsers(null, discovered);
+            return resolve(discovered);
         });
     });
 }
@@ -267,6 +289,7 @@ module.exports = {
     addUsers,
     correct,
     exists,
+    getExisting,
     getUser,
     removeIgnored,
     setDelay,

@@ -197,94 +197,67 @@ function processPost(author, permlink, mustBeNew) {
  * @param {string} author The author of the post
  * @param {string} permlink The permlink of the post
  * @param {string} type The type of the post (post or comment)
- * @param {string[]} [mentions] An array of already found mentions
  */
-async function processMentions(body, author, permlink, type, mentions) {
+async function processMentions(body, author, permlink, type) {
+    let mentions = [];
     const knownUsernames = [];
-    if(!mentions) {
-        const mentionRegex = /(?:^|[^\w=/])@([a-z][a-z\d.-]{1,16}[a-z\d])(.|$)/gimu;
-        let matches = [];
-        mentions = [];
-        while(matches = mentionRegex.exec(body)) {
-            const escapedMention = matches[1].replace('.', '\.');
-            const mentionInQuote = new RegExp('^> *.*@' + escapedMention + '.*|<blockquote( +cite="[^"]+")?>((?!<blockquote)[\\s\\S])*@' + escapedMention + '((?!<blockquote)[\\s\\S])*<\\/blockquote>', 'iu').test(body);
-            const mentionInCode = new RegExp('```[\\s\\S]*@' + escapedMention + '[\\s\\S]*```|`[^`\\r\\n\\f\\v]*@' + escapedMention + '[^`\\r\\n\\f\\v]*`|<code>[\\s\\S]*@' + escapedMention + '[\\s\\S]*<\\/code>', 'iu').test(body);
-            if(!/[\w/(]/.test(matches[2]) && !mentionInCode && !mentionInQuote) {
-                // Pushing mentions, if they contain adjacent dots --> pushing only the part before those dots
-                mentions.push(matches[1].split(/\.{2,}/)[0].toLowerCase());
-            }
+    const mentionRegex = /(?:^|[^\w=/])@([a-z][a-z\d.-]{1,16}[a-z\d])(.|$)/gimu;
+    // All variations of the author username
+    const authorRegex = new RegExp(author.replace(/([a-z]+|\d+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
+    const imageOrDomainRegex = /\.(jpe?g|png|gif|com?|io|org|net|me)$/;
+    const ignoredMentions = usernameChecker.getUser(author).ignored;
+    let matches = [];
+    while(matches = mentionRegex.exec(body)) {
+        const escapedMention = matches[1].replace(/\./g, '\\.');
+        const mentionInQuoteRegex = new RegExp('^> *.*@' + escapedMention + '.*|<blockquote( +cite="[^"]+")?>((?!<blockquote)[\\s\\S])*@' + escapedMention + '((?!<blockquote)[\\s\\S])*<\\/blockquote>', 'i');
+        const mentionInCodeRegex = new RegExp('```[\\s\\S]*@' + escapedMention + '[\\s\\S]*```|`[^`\\r\\n\\f\\v]*@' + escapedMention + '[^`\\r\\n\\f\\v]*`|<code>[\\s\\S]*@' + escapedMention + '[\\s\\S]*<\\/code>', 'i');
+        // If the mention contains adjacent dots, taking only the part before those dots
+        const mention = matches[1].split(/\.{2,}/)[0].toLowerCase();
+        // True if not a duplicate, not ignored, not part of a word/url, not a variation of the author username, not in a code block, not in a quote and not ending with an image/domain extension
+        if(!mentions.includes(mention) && !ignoredMentions.includes(mention) && !/[\w/(]/.test(matches[2]) && mention.match(authorRegex).every(match => !match) && !mentionInCodeRegex.test(body) && !mentionInQuoteRegex.test(body) && !imageOrDomainRegex.test(mention)) {
+            // Adding the username to the wrongMentions array only if it doesn't contain a social network reference in the 40 words surrounding it
+            const match = body.match(new RegExp('(?:\\S+\\s+){0,20}\\S*@' + escapedMention + '(?:[^a-z\d]\\S*(?:\\s+\\S+){0,20}|$)', 'i'));
+            if(match && !/(insta|tele)gram|tw(it?ter|eet)|facebook|golos|discord|medium|minds|brunch|텔레그램|[^a-z](ig|rt|fb|eos)[^a-z]|t.(me|co)\//i.test(match[0])) mentions.push(mention);
         }
-        // Removing duplicates and already encountered users
-        mentions = _.uniq(mentions).filter(mention => {
-            if(await usernameChecker.exists(mention)) {
+    }
+    if(mentions.length > 0) {
+        // Removing existing usernames
+        const existingUsernames = await usernameChecker.getExisting(mentions);
+        mentions = mentions.filter(mention => {
+            if(existingUsernames.includes(mention)) {
                 if(mention !== author) knownUsernames.push(mention);
                 return false;
             }
             return true;
         });
-        // Removing all variations of the author username
-        const authorRegex = new RegExp(author.replace(/([a-z]+|\d+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
-        mentions = mentions.filter(mention => {
-            return mention.match(authorRegex).every(match => match === undefined || match === '');
-        });
-        // Removing images and popular domain extensions
-        mentions = mentions.filter(mention => !/\.(jpe?g|png|gif|com?|io|org|net)$/.test(mention));
-        // Removing ignored mentions
-        const ignoredMentions = usernameChecker.getUser(author).ignored;
-        if(ignoredMentions.length > 0) mentions = mentions.filter(mention => !ignoredMentions.includes(mention));
-    }
-    if(mentions.length > 0) {
-        steem.api.lookupAccountNames(mentions, (err, res) => {
-            if(err) {
-                console.error(`Request error (lookupAccountNames): ${ err.message } with ${ request_nodes[0] }`);
-                // Putting the node where the error comes from at the end of the array
-                request_nodes.push(request_nodes.shift());
-                steem.api.setOptions({ url: request_nodes[0] });
-                console.log(`Retrying with ${ request_nodes[0] }`);
-                processMentions(body, author, permlink, type, mentions);
-            } else {
-                let wrongMentions = [];
-                // Adding each username that got a null result from the API (meaning the user doesn't exist) to the wrongMentions array
-                for(let i = 0; i < mentions.length; i++) {
-                    if(res[i] === null) {
-                        // Adding the username to the wrongMentions array only if it doesn't contain a social network reference in the 40 words surrounding it
-                        const match = body.match(new RegExp('(?:\\S+\\s+){0,20}\\S*@' + _.escapeRegExp(mentions[i]) + '(?:[^a-z\d]\\S*(?:\\s+\\S+){0,20}|$)', 'i'));
-                        if(match && !/(insta|tele)gram|tw(it?ter|eet)|facebook|golos|discord|medium|minds|brunch|텔레그램|[^a-z](ig|rt|fb|eos)[^a-z]|t.(me|co)\//i.test(match[0])) wrongMentions.push(mentions[i]);
-                    } else {
-                        usernameChecker.addUsers(author, mentions[i]);
-                        knownUsernames.push(mentions[i]);
-                    }
-                }
-                // Building and sending a message if any wrong mention has been found in the post/comment
-                if(wrongMentions.length > 0) {
-                    let message = `Hi @${ author }, I'm @checky ! While checking the mentions made in this ${ type } I noticed that @${ wrongMentions[0] }`;
-                    const promises = wrongMentions.map(mention => usernameChecker.correct(mention, author, knownUsernames));
-                    Promise.all(promises)
-                           .then((suggestions) => {
-                                if(wrongMentions.length > 1) {
-                                    suggestions = _.uniq(_.compact(suggestions));
-                                    let lastSentence = 'Maybe you made some typos';
-                                    if(suggestions.length > 0) {
-                                        lastSentence = 'Did you mean to write @<em></em>' + suggestions[0];
-                                        if(suggestions.length > 1) {
-                                            for(let i = 1; i < suggestions.length - 1; i++) {
-                                                lastSentence += ', @<em></em>' + suggestions[i];
-                                            }
-                                            lastSentence += ' and @<em></em>' + suggestions[suggestions.length - 1];
-                                        }
-                                    }
-                                    for(let i = 1; i < wrongMentions.length - 1; i++) {
-                                        message += ', @' + wrongMentions[i];
-                                    }
-                                    message += ` and @${ wrongMentions[wrongMentions.length - 1]} don't exist on Steem. ${ lastSentence } ?`;
-                                } else message += ` doesn't exist on Steem. ${ suggestions[0] ? 'Did you mean to write @<em></em>' + suggestions[0] : 'Maybe you made a typo' } ?`;
-                                comments.push([message, author, permlink, 'Possible wrong mentions found']);
-                           });
-                }
-            }
-        });
-    }
-    usernameChecker.addMentioned(author, knownUsernames);
+        // At this point, the mentions array can only contain wrong mentions, building and sending a message if the array is not empty
+        if(mentions.length > 0) {
+            let message = `Hi @${ author }, I'm @checky ! While checking the mentions made in this ${ type } I noticed that @${ mentions[0] }`;
+            const promises = mentions.map(mention => usernameChecker.correct(mention, author, knownUsernames));
+            Promise.all(promises)
+                .then(suggestions => {
+                    usernameChecker.addMentioned(author, knownUsernames);
+                    if(mentions.length > 1) {
+                        suggestions = _.uniq(_.compact(suggestions));
+                        let lastSentence = 'Maybe you made some typos';
+                        if(suggestions.length > 0) {
+                            lastSentence = 'Did you mean to write @<em></em>' + suggestions[0];
+                            if(suggestions.length > 1) {
+                                for(let i = 1; i < suggestions.length - 1; i++) {
+                                    lastSentence += ', @<em></em>' + suggestions[i];
+                                }
+                                lastSentence += ' and @<em></em>' + suggestions[suggestions.length - 1];
+                            }
+                        }
+                        for(let i = 1; i < mentions.length - 1; i++) {
+                            message += ', @' + mentions[i];
+                        }
+                        message += ` and @${ mentions[mentions.length - 1]} don't exist on Steem. ${ lastSentence } ?`;
+                    } else message += ` doesn't exist on Steem. ${ suggestions[0] ? 'Did you mean to write @<em></em>' + suggestions[0] : 'Maybe you made a typo' } ?`;
+                    comments.push([message, author, permlink, 'Possible wrong mentions found']);
+                });
+        }
+    } else usernameChecker.addMentioned(author, knownUsernames);
 }
 
 /**
@@ -388,7 +361,7 @@ function sendMessage(message, author, permlink, title) {
         ]
     }
     const footer = '\n\n###### If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with `!help`.';
-    steem.broadcast.comment(postingKey, author, permlink, 'checky', 're-' + author.replace('.', '') + '-' + permlink, title, message + footer, JSON.stringify(metadata), function(err) {
+    steem.broadcast.comment(postingKey, author, permlink, 'checky', 're-' + author.replace(/\./g, '') + '-' + permlink, title, message + footer, JSON.stringify(metadata), function(err) {
         if(err) {
             console.error(`Broadcast error: ${ err.message } with ${ request_nodes[0] }`);
             // Putting the node where the error comes from at the end of the array
