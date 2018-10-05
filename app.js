@@ -66,16 +66,6 @@ function stream() {
                     case 'delegate_vesting_shares':
                         usernameChecker.addUsers(operation[1].delegator, operation[1].delegatee);
                         break;
-                    case 'escrow_release':
-                        usernameChecker.addUsers(operation[1].from, operation[1].to, operation[1].agent, operation[1].who, operation[1].receiver);
-                        break;
-                    case 'escrow_approve':
-                    case 'escrow_dispute':
-                        usernameChecker.addUsers(operation[1].from, operation[1].to, operation[1].agent, operation[1].who);
-                        break;
-                    case 'escrow_transfer':
-                        usernameChecker.addUsers(operation[1].from, operation[1].to, operation[1].agent);
-                        break;
                     case 'fill_transfer_from_savings':
                     case 'transfer':
                     case 'transfer_to_vesting':
@@ -84,73 +74,16 @@ function stream() {
                         usernameChecker.addUsers(operation[1].from, operation[1].to);
                         break;
                     case 'fill_vesting_withdraw':
-                    case 'set_withdraw_vesting_route':
                         usernameChecker.addUsers(operation[1].from_account, operation[1].to_account);
-                        break;
-                    case 'fill_order':
-                        usernameChecker.addUsers(operation[1].current_owner, operation[1].open_owner);
-                        break;
-                    case 'request_account_recovery':
-                        usernameChecker.addUsers(operation[1].recovery_account, operation[1].account_to_recover);
-                        break;
-                    case 'change_recovery_account':
-                        usernameChecker.addUsers(operation[1].account_to_recover, operation[1].new_recovery_account);
                         break;
                     case 'account_create':
                     case 'account_create_with_delegation':
                         usernameChecker.addUsers(operation[1].creator, operation[1].new_account_name);
                         break;
-                    case 'account_witness_vote':
-                        usernameChecker.addUsers(operation[1].account, operation[1].witness);
-                        break;
-                    case 'account_witness_proxy':
-                        usernameChecker.addUsers(operation[1].account, operation[1].proxy);
-                        break;
-                    case 'account_update':
-                    case 'claim_reward_balance':
-                    case 'decline_voting_rights':
-                    case 'return_vesting_delegation':
-                    case 'withdraw_vesting':
-                        usernameChecker.addUsers(operation[1].account);
-                        break;
-                    case 'convert': 
-                    case 'fill_convert_request':
-                    case 'interest':
-                    case 'limit_order_create':
-                    case 'limit_order_create2':
-                    case 'limit_order_cancel':
-                    case 'liquidity_reward':
-                    case 'shutdown_witness':
-                    case 'witness_update':
-                        usernameChecker.addUsers(operation[1].owner);
-                        break;
-                    case 'author_reward':
                     case 'comment_options':
-                    case 'comment_payout_update':
-                    case 'comment_reward':
                     case 'delete_comment':
                         usernameChecker.addUsers(operation[1].author);
                         break;
-                    case 'curation_reward':
-                        usernameChecker.addUsers(operation[1].curator, operation[1].comment_author);
-                        break;
-                    case 'feed_publish':
-                        usernameChecker.addUsers(operation[1].publisher);
-                        break;
-                    case 'recover_account':
-                        usernameChecker.addUsers(operation[1].account_to_recover);
-                        break;
-                    case 'cancel_transfer_from_savings':
-                        usernameChecker.addUsers(operation[1].from);
-                        break;
-                    case 'comment_benefactor_reward':
-                        usernameChecker.addUsers(operation[1].benefactor, operation[1].author);
-                        break;
-                    case 'producer_reward':
-                        usernameChecker.addUsers(operation[1].producer);
-                        break;
-                    case 'prove_authority':
-                        usernameChecker.addUsers(operation[1].challenged);
                 }
             }
         });
