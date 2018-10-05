@@ -3,6 +3,8 @@ const fs = require('fs');
 const steem = require('steem');
 const { request_nodes } = require('./config');
 
+let unallowedUsernameRegex = /(^|\.)[\d.-]|[.-](\.|$)|-{2}|.{17}|(^|\.).{0,2}(\.|$)/;
+
 steem.api.setOptions({ url: request_nodes[0] });
 
 // Creating a users object and updating it with the content of ./data/users.json if the file exists 
@@ -74,12 +76,12 @@ function correct(username, author, otherMentions) {
         if(suggestion) return resolve(suggestion);
         if(await exists('the' + username)) return resolve('the' + username);
         // Testing for usernames that are one edit away from the wrong username
-        const ed1 = edits1(username);
-        let suggestions = _.uniq(await getExisting(ed1));
+        const ed1 = edits1(username, false);
+        let suggestions = await getExisting(ed1);
         if(suggestions.length === 0) {
             // Testing for usernames that are two edits away from the wrong username
             const ed2 = edits2(ed1);
-            suggestions = _.uniq(await getExisting(ed2));
+            suggestions = await getExisting(ed2);
         }
         if(suggestions.length > 0) {
             if(suggestions.length === 1) return resolve(suggestions[0]);
@@ -96,14 +98,15 @@ function correct(username, author, otherMentions) {
 /**
  * Generates all the edits that are one edit away from `username`
  * @param {string} username The wrong username
+ * @param {boolean} calledByEdits2 Whether or not edits1() has been called by edits2()
  * @returns {string[]} The edits one edit away from `username`
  */
-function edits1(username) {
+function edits1(username, calledByEdits2) {
     const characters = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','0','1','2','3','4','5','6','7','8','9','.','-'];
-    const deletes = getDeletes(username);
-    const transposes = getTransposes(username.split(''));
-    const replaces = getReplaces(username, characters);
-    const inserts = getInserts(username, characters);
+    const deletes = getDeletes(username, !calledByEdits2);
+    const transposes = getTransposes(username.split(''), !calledByEdits2);
+    const replaces = getReplaces(username, characters, !calledByEdits2);
+    const inserts = getInserts(username, characters, !calledByEdits2);
     return _.union(deletes, transposes, replaces, inserts);
 }
 
@@ -115,7 +118,7 @@ function edits1(username) {
 function edits2(edits) {
     let edits2 = [];
     for(let i = 0; i < edits.length; i++) {
-        const ed = edits1(edits[i]);
+        const ed = edits1(edits[i], true);
         edits2 = edits2.concat(ed);
     }
     return _.uniq(edits2);
@@ -124,12 +127,14 @@ function edits2(edits) {
 /**
  * Generates all the variations of `username` with one character deleted
  * @param {string} username The username
+ * @param {boolean} fromEdits1 Whether or not the function has been called from edits1()
  * @returns {string[]} The variations of `username` with one character deleted
  */
-function getDeletes(username) {
+function getDeletes(username, fromEdits1) {
     const deletes = [];
     for(let i = 0; i < username.length; i++) {
-        deletes.push(username.substr(0, i) + username.substr(i + 1, username.length));
+        const del = username.substr(0, i) + username.substr(i + 1, username.length);
+        if(fromEdits1 || !unallowedUsernameRegex.test(del)) deletes.push(del);
     }
     return deletes;
 }
@@ -138,16 +143,17 @@ function getDeletes(username) {
  * Generates all the variations of `username` with one character inserted
  * @param {string} username The username
  * @param {string[]} characters The characters allowed
+ * @param {boolean} fromEdits1 Whether or not the function has been called from edits1()
  * @returns {string[]} The variations of `username` with one character inserted
  */
-function getInserts(username, characters) {
+function getInserts(username, characters, fromEdits1) {
     const inserts = [];
     for(let i = 0; i <= username.length; i++) {
         const firstPart = username.substr(0, i);
         const lastPart = username.substr(i, username.length);
         for(let j = 0; j < characters.length; j++) {
             const insert = firstPart + characters[j] + lastPart;
-            inserts.push(insert);
+            if(fromEdits1 || !unallowedUsernameRegex.test(insert)) inserts.push(insert);
         }
     }
     return inserts;
@@ -157,15 +163,19 @@ function getInserts(username, characters) {
  * Generates all the variations of `username` with one character replaced
  * @param {string} username The username
  * @param {string[]} characters The characters allowed
+ * @param {boolean} fromEdits1 Whether or not the function has been called from edits1()
  * @returns {string[]} The variations of `username` with one character replaced
  */
-function getReplaces(username, characters) {
+function getReplaces(username, characters, fromEdits1) {
     const replaces = [];
     for(let i = 0; i < username.length; i++) {
         const firstPart = username.substr(0, i);
         const lastPart = username.substr(i + 1, username.length);
         for(let j = 0; j < characters.length; j++) {
-            replaces.push(firstPart + characters[j] + lastPart);
+            if(username[i] !== characters[j]) {
+                const replace = firstPart + characters[j] + lastPart;
+                if(fromEdits1 || !unallowedUsernameRegex.test(replace)) replaces.push(replace);
+            }
         }
     }
     return replaces;
@@ -174,15 +184,19 @@ function getReplaces(username, characters) {
 /**
  * Generates all the variations of `username` with two adjacent characters swapped
  * @param {string[]} splits The characters contained in `username`
+ * @param {boolean} fromEdits1 Whether or not the function has been called from edits1()
  * @returns {string[]} The variations of `username` with two adjacent characters swapped
  */
-function getTransposes(splits) {
+function getTransposes(splits, fromEdits1) {
     const transposes = [];
     for(let i = 0; i < splits.length; i++) {
-        const temp = splits.slice();
-        temp[i] = splits[i+1];
-        temp[i+1] = splits[i];
-        transposes.push(temp.join(''));
+        if(splits[i] !== splits[i+1]) {
+            const temp = splits.slice();
+            temp[i] = splits[i+1];
+            temp[i+1] = splits[i];
+            const transpose = temp.join('');
+            if(fromEdits1 || !unallowedUsernameRegex.test(transpose)) transposes.push(transpose);
+        }
     }
     return transposes;
 }

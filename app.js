@@ -214,7 +214,7 @@ async function processMentions(body, author, permlink, type) {
         // If the mention contains adjacent dots, taking only the part before those dots
         const mention = matches[1].split(/\.{2,}/)[0].toLowerCase();
         // True if not a duplicate, not ignored, not part of a word/url, not a variation of the author username, not in a code block, not in a quote and not ending with an image/domain extension
-        if(!mentions.includes(mention) && !ignoredMentions.includes(mention) && !/[\w/(]/.test(matches[2]) && mention.match(authorRegex).every(match => !match) && !mentionInCodeRegex.test(body) && !mentionInQuoteRegex.test(body) && !imageOrDomainRegex.test(mention)) {
+        if(!mentions.includes(mention) && !ignoredMentions.includes(mention) && !/[\w/(_]/.test(matches[2]) && mention.match(authorRegex).every(match => !match) && !mentionInCodeRegex.test(body) && !mentionInQuoteRegex.test(body) && !imageOrDomainRegex.test(mention)) {
             // Adding the username to the wrongMentions array only if it doesn't contain a social network reference in the 40 words surrounding it
             const match = body.match(new RegExp('(?:\\S+\\s+){0,20}\\S*@' + escapedMention + '(?:[^a-z\d]\\S*(?:\\s+\\S+){0,20}|$)', 'i'));
             if(match && !/(insta|tele)gram|tw(it?ter|eet)|facebook|golos|discord|medium|minds|brunch|텔레그램|[^a-z](ig|rt|fb|eos)[^a-z]|t.(me|co)\//i.test(match[0])) mentions.push(mention);
