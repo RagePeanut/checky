@@ -1,7 +1,7 @@
-const _ = require('lodash');
 const steem = require('steem');
 const steemStream = require('steem');
-const usernameChecker = require('./username-checker');
+const usernameChecker = require('./utils/username-checker');
+const { trim, uniqCompact } = require('./utils/helper');
 const { request_nodes, stream_nodes } = require('./config');
 const { version } = require('./package');
 
@@ -171,7 +171,7 @@ async function processMentions(body, author, permlink, type) {
                 .then(suggestions => {
                     usernameChecker.addMentioned(author, knownUsernames);
                     if(mentions.length > 1) {
-                        suggestions = _.uniq(_.compact(suggestions));
+                        suggestions = uniqCompact(suggestions);
                         let lastSentence = 'Maybe you made some typos';
                         if(suggestions.length > 0) {
                             lastSentence = 'Did you mean to write @<em></em>' + suggestions[0];
@@ -228,7 +228,7 @@ async function processCommand(command, params, target, author, permlink) {
             case 'switch':
                 if(params) {
                     // Removing white spaces arround the parameter
-                    const mode = _.trim(params);
+                    const mode = trim(params);
                     switch(mode) {
                         case 'on':
                         case 'regular':
