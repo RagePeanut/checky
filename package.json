@@ -18,8 +18,7 @@
   "author": "RagePeanut",
   "license": "MIT",
   "dependencies": {
-    "lodash": "^4.17.10",
-    "steem": "^0.7.1"
+    "steem": "^0.7.2"
   },
   "devDependencies": {},
   "repository": {
