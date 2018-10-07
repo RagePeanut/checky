@@ -22,19 +22,6 @@ function trim(str) {
 }
 
 /**
- * Removes duplicate values from an array
- * @param {any[]} array The array possibly containing duplicates
- * @returns {any[]} The array without duplicate values
- */
-function uniq(array) {
-    const arr = [];
-    array.forEach(elt => {
-        if(!arr.includes(elt)) arr.push(elt);
-    })
-    return arr;
-}
-
-/**
  * Removes duplicate, null and undefined values from an array
  * @param {any[]} array The array possibly containing duplicates, null and undefined values
  * @returns {any[]} The array without duplicate, null and undefined values
@@ -50,6 +37,5 @@ function uniqCompact(array) {
 module.exports = {
     merge,
     trim,
-    uniq,
     uniqCompact
 }

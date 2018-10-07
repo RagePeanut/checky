@@ -1,7 +1,7 @@
 const fs = require('fs');
 const steem = require('steem');
 const { request_nodes } = require('../config');
-const { merge, uniq } = require('./helper');
+const { merge } = require('./helper');
 
 const unallowedUsernameRegex = /(^|\.)[\d.-]|[.-](\.|$)|-{2}|.{17}|(^|\.).{0,2}(\.|$)/;
 
@@ -37,7 +37,7 @@ function addIgnored(author, usernames) {
 function addMentioned(author, usernames) {
     usernames.forEach(username => {
         if(!users[author].mentioned.includes(username)) users[author].mentioned.push(username);
-        users[username].occurrences++;
+        users[username].occ++;
     });
 }
 
@@ -51,7 +51,7 @@ function addUsers(origin, ...usernames) {
     if(usernames.length > 0 && typeof usernames[0] === 'object') usernames = usernames[0];
     usernames.forEach(username => {
         if(username !== '' && !users.hasOwnProperty(username)) {
-            users[username] = { mode: 'regular', ignored: [], delay: 0, occurrences: 0, mentioned: [] };
+            users[username] = { mode: 'regular', ignored: [], delay: 0, occ: 0, mentioned: [] };
         }
     });
 }
@@ -74,14 +74,14 @@ function correct(username, author, otherMentions) {
             return usernameNoPunct === mentionNoPunct || 'the' + usernameNoPunct === mentionNoPunct;
         });
         if(suggestion) return resolve(suggestion);
-        if(await exists('the' + username)) return resolve('the' + username);
         // Testing for usernames that are one edit away from the wrong username
-        const ed1 = edits1(username, false);
-        let suggestions = await getExisting(ed1);
+        let edits = new Set();
+        edits1(username, edits, false);
+        let suggestions = await getExisting(edits);
         if(suggestions.length === 0) {
             // Testing for usernames that are two edits away from the wrong username
-            const ed2 = edits2(ed1);
-            suggestions = await getExisting(ed2);
+            edits = edits2(edits);
+            suggestions = await getExisting(edits);
         }
         if(suggestions.length > 0) {
             if(suggestions.length === 1) return resolve(suggestions[0]);
@@ -89,116 +89,105 @@ function correct(username, author, otherMentions) {
             suggestion = suggestions.find(mention => otherMentions.includes(mention) || users[author].mentioned.includes(mention));
             if(suggestion) return resolve(suggestion);
             // Suggesting the most mentioned username overall
-            return resolve(suggestions.sort((a, b) => users[b].occurrences - users[a].occurrences)[0]);
+            return resolve(suggestions.sort((a, b) => users[b].occ - users[a].occ)[0]);
+        } else if(await exists('the' + username)) return resolve('the' + username);
         // No suggestion
-        } else return resolve(null);
+        else return resolve(null);
     });
 }
 
 /**
  * Generates all the edits that are one edit away from `username`
  * @param {string} username The wrong username
- * @param {boolean} calledByEdits2 Whether or not edits1() has been called by edits2()
- * @returns {string[]} The edits one edit away from `username`
+ * @param {Set<string>} edits The current edits
+ * @param {boolean} mustBeValid Whether or not the edits generated must be valid usernames
  */
-function edits1(username, calledByEdits2) {
+function edits1(username, edits, mustBeValid) {
     const characters = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','0','1','2','3','4','5','6','7','8','9','.','-'];
-    const deletes = getDeletes(username, !calledByEdits2);
-    const transposes = getTransposes(username.split(''), !calledByEdits2);
-    const replaces = getReplaces(username, characters, !calledByEdits2);
-    const inserts = getInserts(username, characters, !calledByEdits2);
-    return merge(deletes, transposes, replaces, inserts);
+    deletes(username, edits, mustBeValid);
+    transposes(username.split(''), edits, mustBeValid);
+    replaces(username, edits, characters, mustBeValid);
+    inserts(username, edits, characters, mustBeValid);
 }
 
 /**
  * Generates all the edits that are two edits away from `username`
- * @param {string[]} edits The edits one edit away from `username`
- * @returns {string[]} The edits two edits away from `username`
+ * @param {Set<string>} edits The edits one edit away from `username`
+ * @returns {Set<string>} The edits two edits away from `username`
  */
 function edits2(edits) {
-    let edits2 = [];
-    for(let i = 0; i < edits.length; i++) {
-        const ed = edits1(edits[i], true);
-        edits2 = edits2.concat(ed);
-    }
-    return uniq(edits2);
+    const ed2 = new Set();
+    edits.forEach(edit => edits1(edit, ed2, true));
+    return ed2;
 }
 
 /**
  * Generates all the variations of `username` with one character deleted
  * @param {string} username The username
- * @param {boolean} fromEdits1 Whether or not the function has been called from edits1()
- * @returns {string[]} The variations of `username` with one character deleted
+ * @param {Set<string>} edits The current edits
+ * @param {boolean} mustBeValid Whether or not the edits generated must be valid usernames
  */
-function getDeletes(username, fromEdits1) {
-    const deletes = [];
+function deletes(username, edits, mustBeValid) {
     for(let i = 0; i < username.length; i++) {
         const del = username.substr(0, i) + username.substr(i + 1, username.length);
-        if(fromEdits1 || !unallowedUsernameRegex.test(del)) deletes.push(del);
+        if(!mustBeValid || !unallowedUsernameRegex.test(del)) edits.add(del);
     }
-    return deletes;
 }
 
 /**
  * Generates all the variations of `username` with one character inserted
  * @param {string} username The username
+ * @param {Set<string>} edits The current edits
  * @param {string[]} characters The characters allowed
- * @param {boolean} fromEdits1 Whether or not the function has been called from edits1()
- * @returns {string[]} The variations of `username` with one character inserted
+ * @param {boolean} mustBeValid Whether or not the edits generated must be valid usernames
  */
-function getInserts(username, characters, fromEdits1) {
-    const inserts = [];
+function inserts(username, edits, characters, mustBeValid) {
     for(let i = 0; i <= username.length; i++) {
         const firstPart = username.substr(0, i);
         const lastPart = username.substr(i, username.length);
         for(let j = 0; j < characters.length; j++) {
             const insert = firstPart + characters[j] + lastPart;
-            if(fromEdits1 || !unallowedUsernameRegex.test(insert)) inserts.push(insert);
+            if(!mustBeValid || !unallowedUsernameRegex.test(insert)) edits.add(insert);
         }
     }
-    return inserts;
 }
 
 /**
  * Generates all the variations of `username` with one character replaced
  * @param {string} username The username
+ * @param {Set<string>} edits The current edits
  * @param {string[]} characters The characters allowed
- * @param {boolean} fromEdits1 Whether or not the function has been called from edits1()
- * @returns {string[]} The variations of `username` with one character replaced
+ * @param {boolean} mustBeValid Whether or not the edits generated must be valid usernames
  */
-function getReplaces(username, characters, fromEdits1) {
-    const replaces = [];
+function replaces(username, edits, characters, mustBeValid) {
     for(let i = 0; i < username.length; i++) {
         const firstPart = username.substr(0, i);
         const lastPart = username.substr(i + 1, username.length);
         for(let j = 0; j < characters.length; j++) {
             if(username[i] !== characters[j]) {
                 const replace = firstPart + characters[j] + lastPart;
-                if(fromEdits1 || !unallowedUsernameRegex.test(replace)) replaces.push(replace);
+                if(!mustBeValid || !unallowedUsernameRegex.test(replace)) edits.add(replace);
             }
         }
     }
-    return replaces;
 }
 
 /**
  * Generates all the variations of `username` with two adjacent characters swapped
  * @param {string[]} splits The characters contained in `username`
- * @param {boolean} fromEdits1 Whether or not the function has been called from edits1()
- * @returns {string[]} The variations of `username` with two adjacent characters swapped
+ * @param {Set<string>} edits The current edits
+ * @param {boolean} mustBeValid Whether or not the edits generated must be valid usernames
  */
-function getTransposes(splits, fromEdits1) {
-    const transposes = [];
+function transposes(splits, edits, mustBeValid) {
     for(let i = 0; i < splits.length; i++) {
         if(splits[i] !== splits[i+1]) {
             const temp = splits.slice();
             temp[i] = splits[i+1];
             temp[i+1] = splits[i];
             const transpose = temp.join('');
-            if(fromEdits1 || !unallowedUsernameRegex.test(transpose)) transposes.push(transpose);
+            if(!mustBeValid || !unallowedUsernameRegex.test(transpose)) edits.add(transpose);
         }
     }
-    return transposes;
 }
 
 /**
@@ -221,7 +210,7 @@ async function exists(username) {
 
 /**
  * Returns the received usernames that are known
- * @param {string[]} usernames The usernames
+ * @param {Set<string>} usernames The usernames
  * @returns {Promise<string[]>} The usernames that exist on the Steem blockchain
  */
 function getExisting(usernames) {
@@ -232,7 +221,7 @@ function getExisting(usernames) {
             if(users.hasOwnProperty(username)) existing.push(username);
             else toCheck.push(username);
         });
-        if(toCheck.length === 0) return resolve(usernames);
+        if(toCheck.length === 0) return resolve([...usernames]);
         const promises = [];
         for(let i = 0; i < toCheck.length; i += 10000) {
             promises.push(getDiscovered(toCheck.slice(i, i + 10000)))
