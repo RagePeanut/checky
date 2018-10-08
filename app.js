@@ -151,7 +151,7 @@ async function processMentions(body, author, permlink, type) {
         if(!mentions.includes(mention) && !ignoredMentions.includes(mention) && !/[\w/(_]/.test(matches[2]) && mention.match(authorRegex).every(match => !match) && !mentionInCodeRegex.test(body) && !mentionInQuoteRegex.test(body) && !imageOrDomainRegex.test(mention)) {
             // Adding the username to the wrongMentions array only if it doesn't contain a social network reference in the 40 words surrounding it
             const match = body.match(new RegExp('(?:\\S+\\s+){0,20}\\S*@' + escapedMention + '(?:[^a-z\d]\\S*(?:\\s+\\S+){0,20}|$)', 'i'));
-            if(match && !/(insta|tele)gram|tw(it?ter|eet)|facebook|golos|discord|medium|minds|brunch|텔레그램|[^a-z](ig|rt|fb|eos)[^a-z]|t.(me|co)\//i.test(match[0])) mentions.push(mention);
+            if(match && !/(insta|tele)gram|tw(it?ter|eet)|facebook|golos|whaleshares?|discord|medium|minds|brunch|텔레그램|[^a-z](ig|rt|fb|ws|eos)[^a-z]|t.(me|co)\//i.test(match[0])) mentions.push(mention);
         }
     }
     if(mentions.length > 0) {
