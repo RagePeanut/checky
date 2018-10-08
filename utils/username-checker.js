@@ -14,11 +14,7 @@ if(fs.existsSync('data')) {
 } else fs.mkdirSync('data');
 
 // Updating the ./data/users.json file with the content of the users object every 5 seconds
-setInterval(() => {
-    fs.writeFile('data/users.json', JSON.stringify(users), err => {
-        if(err) console.error(err.message);
-    });
-}, 5 * 1000);
+updateUsersFile(5);
 
 /**
  * Adds usernames to an author's ignored mentions
@@ -284,6 +280,17 @@ function setDelay(username, delay) {
  */
 function setMode(username, mode) {
     users[username].mode = mode;
+}
+
+/**
+ * Updates the ./data/users.json file with the content of the users object (recursively called every `interval` seconds)
+ * @param {number} interval The interval between the end of a file updated and the beginning of the next file update
+ */
+function updateUsersFile(interval) {
+    fs.writeFile('data/users.json', JSON.stringify(users), err => {
+        if(err) console.error(err.message);
+        setTimeout(updateUsersFile, interval * 1000, interval);
+    })
 }
 
 module.exports = {

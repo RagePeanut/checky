@@ -14,9 +14,10 @@ const comments = [];
 let commentsInterval = setInterval(() => {
     if(comments[0]) {
         // Making sure that no comment is sent while processing this one
-        clearInterval(commentsInterval);
+        //clearInterval(commentsInterval);
         const comment = comments.shift();
-        sendMessage(comment[0], comment[1], comment[2], comment[3]);
+        console.log(comment);
+        //sendMessage(comment[0], comment[1], comment[2], comment[3]);
     }
 }, 1000);
 
