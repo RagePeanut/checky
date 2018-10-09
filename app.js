@@ -126,7 +126,9 @@ function processPost(author, permlink, mustBeNew) {
                     if(typeof metadata !== 'object') throw new Error('The metadata isn of type ' + typeof metadata);
                     if(!metadata.tags) throw new Error('The tags property is ' + metadata.tags);
                     if(!Array.isArray(metadata.tags)) throw new Error('The tags property isn\'t an array');
-                    processMentions(res.body, author, permlink, res.parent_author === '' ? 'post' : 'comment', metadata.tags);
+                    if(!metadata.app || typeof metadata.app !== 'string' || !/share2steem/.test(metadata.app)) {
+                        processMentions(res.body, author, permlink, res.parent_author === '' ? 'post' : 'comment', metadata.tags);
+                    }
                 } catch(e) {
                     processMentions(res.body, author, permlink, res.parent_author === '' ? 'post' : 'comment', []);
                 }
