@@ -57,9 +57,10 @@ function addUsers(origin, ...usernames) {
  * @param {string} username The username to be corrected
  * @param {string} author The author of the post
  * @param {string[]} otherMentions The correct mentions made in the post
+ * @param {string[]} tags The tags of the post
  * @returns {Promise<string>} A correct username close to the wrong one, returns null if no username is found
  */
-function correct(username, author, otherMentions) {
+function correct(username, author, otherMentions, tags) {
     return new Promise(async resolve => {
         // Adding `author` to `otherMentions` to avoid repeating the same testing code twice
         if(!otherMentions.includes(author)) otherMentions.unshift(author);
@@ -69,7 +70,7 @@ function correct(username, author, otherMentions) {
             const mentionNoPunct = mention.replace(/[\d.-]/g, '');
             return usernameNoPunct === mentionNoPunct || 'the' + usernameNoPunct === mentionNoPunct;
         });
-        if(suggestion) return resolve(suggestion);
+        if(suggestion) return resolve('@<em></em>' + suggestion);
         // Testing for usernames that are one edit away from the wrong username
         let edits = new Set();
         edits1(username, edits, false);
@@ -80,13 +81,15 @@ function correct(username, author, otherMentions) {
             suggestions = await getExisting(edits);
         }
         if(suggestions.length > 0) {
-            if(suggestions.length === 1) return resolve(suggestions[0]);
+            if(suggestions.length === 1) return resolve('@<em></em>' + suggestions[0]);
             // Trying to find the better suggestion based on the mentions made by the author in the post and, if needed, in his previous posts
             suggestion = suggestions.find(mention => otherMentions.includes(mention) || users[author].mentioned.includes(mention));
-            if(suggestion) return resolve(suggestion);
+            if(suggestion) return resolve('@<em></em>' + suggestion);
             // Suggesting the most mentioned username overall
-            return resolve(suggestions.sort((a, b) => users[b].occ - users[a].occ)[0]);
-        } else if(await exists('the' + username)) return resolve('the' + username);
+            return resolve('@<em></em>' + suggestions.sort((a, b) => users[b].occ - users[a].occ)[0]);
+        } else if(await exists('the' + username)) return resolve('@<em></em>the' + username);
+        // Testing for tags written as mentions
+        else if(tags.includes(username)) return resolve('#' + username)
         // No suggestion
         else return resolve(null);
     });

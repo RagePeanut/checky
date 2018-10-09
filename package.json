@@ -1,6 +1,6 @@
 {
   "name": "checky",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "A bot that checks if mentioned Steem users exist.",
   "main": "app.js",
   "scripts": {

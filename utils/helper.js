@@ -29,7 +29,7 @@ function trim(str) {
 function uniqCompact(array) {
     const arr = [];
     array.forEach(elt => {
-        if(elt != null && !arr.includes(elt)) arr.push(elt);
+        if(elt && !arr.includes(elt)) arr.push(elt);
     });
     return arr;
 }
