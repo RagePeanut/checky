@@ -35,6 +35,7 @@ function uniqCompact(array) {
 }
 
 module.exports = {
+    kebabCase: require('lodash.kebabcase'),
     merge,
     trim,
     uniqCompact

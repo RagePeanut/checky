@@ -1,7 +1,7 @@
 const steem = require('steem');
 const steemStream = require('steem');
 const usernameChecker = require('./utils/username-checker');
-const { trim, uniqCompact } = require('./utils/helper');
+const { kebabCase, trim, uniqCompact } = require('./utils/helper');
 const { request_nodes, stream_nodes } = require('./config');
 const { version } = require('./package');
 
@@ -148,6 +148,7 @@ function processPost(author, permlink, mustBeNew) {
 async function processMentions(body, author, permlink, type, tags) {
     let mentions = [];
     const knownUsernames = [];
+    const alreadyEncountered = [];
     const mentionRegex = /(?:^|[^\w=/])@([a-z][a-z\d.-]{1,16}[a-z\d])(.|$)/gimu;
     // All variations of the author username
     const authorRegex = new RegExp(author.replace(/([a-z]+|\d+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
@@ -155,16 +156,32 @@ async function processMentions(body, author, permlink, type, tags) {
     const ignoredMentions = usernameChecker.getUser(author).ignored;
     let matches = [];
     while(matches = mentionRegex.exec(body)) {
-        const escapedMention = matches[1].replace(/\./g, '\\.');
-        const mentionInQuoteRegex = new RegExp('^> *.*@' + escapedMention + '.*|<blockquote( +cite="[^"]+")?>((?!<blockquote)[\\s\\S])*@' + escapedMention + '((?!<blockquote)[\\s\\S])*<\\/blockquote>', 'i');
-        const mentionInCodeRegex = new RegExp('```[\\s\\S]*@' + escapedMention + '[\\s\\S]*```|`[^`\\r\\n\\f\\v]*@' + escapedMention + '[^`\\r\\n\\f\\v]*`|<code>[\\s\\S]*@' + escapedMention + '[\\s\\S]*<\\/code>', 'i');
         // If the mention contains adjacent dots, taking only the part before those dots
         const mention = matches[1].split(/\.{2,}/)[0].toLowerCase();
-        // True if not a duplicate, not ignored, not part of a word/url, not a variation of the author username, not in a code block, not in a quote and not ending with an image/domain extension
-        if(!mentions.includes(mention) && !ignoredMentions.includes(mention) && !/[\w/(]/.test(matches[2]) && mention.match(authorRegex).every(match => !match) && !mentionInCodeRegex.test(body) && !mentionInQuoteRegex.test(body) && !imageOrDomainRegex.test(mention)) {
-            // Adding the username to the wrongMentions array only if it doesn't contain a social network reference in the 40 words surrounding it
-            const match = body.match(new RegExp('(?:\\S+\\s+){0,20}\\S*@' + escapedMention + '(?:[^a-z\d]\\S*(?:\\s+\\S+){0,20}|$)', 'i'));
-            if(match && !/(insta|tele)gram|tw(it?ter|eet)|facebook|golos|whaleshares?|discord|medium|minds|brunch|텔레그램|[^a-z](ig|rt|fb|ws|eos)[^a-z]|t.(me|co)\//i.test(match[0])) mentions.push(mention);
+        // Avoiding to repeat the checking for mentions already encountered in the post
+        if(!alreadyEncountered.includes(mention)) {
+            alreadyEncountered.push(mention);
+            const escapedMention = matches[1].replace(/\./g, '\\.');
+            const textSurroundingMentionRegex = new RegExp('(?:\\S+\\s+){0,20}\\S*@' + escapedMention + '(?:[^a-z\d]\\S*(?:\\s+\\S+){0,20}|$)', 'i');
+            const mentionInQuoteRegex = new RegExp('^> *.*@' + escapedMention + '.*|<blockquote( +cite="[^"]+")?>((?!<blockquote)[\\s\\S])*@' + escapedMention + '((?!<blockquote)[\\s\\S])*<\\/blockquote>', 'i');
+            const mentionInCodeRegex = new RegExp('```[\\s\\S]*@' + escapedMention + '[\\s\\S]*```|`[^`\\r\\n\\f\\v]*@' + escapedMention + '[^`\\r\\n\\f\\v]*`|<code>[\\s\\S]*@' + escapedMention + '[\\s\\S]*<\\/code>', 'i');
+            const mentionInLinkedPostTitleRegex = new RegExp('\\[([^\\]]*@' + escapedMention + '[^\\]]*)]\\([^)]*\\/@([a-z][a-z\\d.-]{1,14}[a-z\\d])\\/([a-z0-9-]+)\\)|<a +href="[^"]*\\/@?([a-z][a-z\\d.-]{1,14}[a-z\\d])\\/([a-z0-9-]+)" *>((?:(?!<\\/a>).)*@' + escapedMention + '(?:(?!<\\/a>).)*)<\\/a>', 'i');
+            // True if not ignored, not part of a word/url, not a variation of the author username, not in a code block, not in a quote and not ending with an image/domain extension
+            if(!ignoredMentions.includes(mention) && !/[\w/(]/.test(matches[2]) && mention.match(authorRegex).every(match => !match) && !mentionInCodeRegex.test(body) && !mentionInQuoteRegex.test(body) && !imageOrDomainRegex.test(mention)) {
+                // Adding the username to the mentions array only if it doesn't contain a social network reference in the 40 words surrounding it
+                let match = body.match(textSurroundingMentionRegex);
+                if(match && !/(insta|tele)gram|tw(it?ter|eet)|facebook|golos|whaleshares?|discord|medium|minds|brunch|텔레그램|[^a-z](ig|rt|fb|ws|eos)[^a-z]|t.(me|co)\//i.test(match[0])) {
+                    // Adding the username to the mentions array only if it isn't part of the title of a post linked in the checked post
+                    match = body.match(mentionInLinkedPostTitleRegex);
+                    if(match) {
+                        // Matches are mapped as follows: 1-6 = title    2-4 = author    3-5 = permlink
+                        if(kebabCase(match[1] || match[6]) === kebabCase(match[3] || match[5])) continue;
+                        const linkedPost = await steem.api.getContentAsync(match[2] || match[4], match[3] || match[5]);
+                        if(linkedPost && kebabCase(match[1] || match[6]) === kebabCase(linkedPost.title)) continue;
+                    }
+                    mentions.push(mention);   
+                }
+            }
         }
     }
     if(mentions.length > 0) {
