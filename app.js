@@ -170,7 +170,7 @@ async function processMentions(body, author, permlink, type, tags) {
             if(!ignoredMentions.includes(mention) && !/[\w/(]/.test(matches[2]) && mention.match(authorRegex).every(match => !match) && !mentionInCodeRegex.test(body) && !mentionInQuoteRegex.test(body) && !imageOrDomainRegex.test(mention)) {
                 // Adding the username to the mentions array only if it doesn't contain a social network reference in the 40 words surrounding it
                 let match = body.match(textSurroundingMentionRegex);
-                if(match && !/(insta|tele)gram|tw(it?ter|eet)|facebook|golos|whaleshares?|discord|medium|minds|brunch|텔레그램|[^a-z](ig|rt|fb|ws|eos)[^a-z]|t.(me|co)\//i.test(match[0])) {
+                if(match && !/(insta|tele)gram|tw(it?ter|eet)|facebook|golos|whaleshares?|discord|medium|minds|brunch|unsplash|텔레그램|[^a-z](ig|rt|fb|ws|eos)[^a-z]|t.(me|co)\//i.test(match[0])) {
                     // Adding the username to the mentions array only if it isn't part of the title of a post linked in the checked post
                     match = body.match(mentionInLinkedPostTitleRegex);
                     if(match) {
