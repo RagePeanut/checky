@@ -70,7 +70,7 @@ function correct(username, author, otherMentions, tags) {
             const mentionNoPunct = mention.replace(/[\d.-]/g, '');
             return usernameNoPunct === mentionNoPunct || 'the' + usernameNoPunct === mentionNoPunct;
         });
-        if(suggestion) return resolve('@<em></em>' + suggestion);
+        if(suggestion) return resolve('@<em></em>' + highlightDifferences(username, suggestion));
         // Testing for usernames that are one edit away from the wrong username
         let edits = new Set();
         edits1(username, edits, false);
@@ -81,15 +81,15 @@ function correct(username, author, otherMentions, tags) {
             suggestions = await getExisting(edits);
         }
         if(suggestions.length > 0) {
-            if(suggestions.length === 1) return resolve('@<em></em>' + suggestions[0]);
+            if(suggestions.length === 1) return resolve('@<em></em>' + highlightDifferences(username, suggestions[0]));
             // Trying to find the better suggestion based on the mentions made by the author in the post and, if needed, in his previous posts
             suggestion = suggestions.find(mention => otherMentions.includes(mention) || users[author].mentioned.includes(mention));
-            if(suggestion) return resolve('@<em></em>' + suggestion);
+            if(suggestion) return resolve('@<em></em>' + highlightDifferences(username, suggestion));
             // Suggesting the most mentioned username overall
-            return resolve('@<em></em>' + suggestions.sort((a, b) => users[b].occ - users[a].occ)[0]);
-        } else if(await exists('the' + username)) return resolve('@<em></em>the' + username);
+            return resolve('@<em></em>' + highlightDifferences(username, suggestions.sort((a, b) => users[b].occ - users[a].occ)[0]));
+        } else if(await exists('the' + username)) return resolve('@<em></em><strong>the</strong>' + username);
         // Testing for tags written as mentions
-        else if(tags.includes(username)) return resolve('#' + username)
+        else if(tags.includes(username)) return resolve('#' + username);
         // No suggestion
         else return resolve(null);
     });
@@ -131,6 +131,29 @@ function deletes(username, edits, mustBeValid) {
         const del = username.substr(0, i) + username.substr(i + 1, username.length);
         if(!mustBeValid || !unallowedUsernameRegex.test(del)) edits.add(del);
     }
+}
+
+/**
+ * Highlights the differences between a wrong username and its suggested correction
+ * @param {string} username A wrong username
+ * @param {string} correction The wrong username's suggested correction
+ * @returns {string} The correction with its differences highlighted (between strong tags)
+ */
+function highlightDifferences(username, correction) {
+    // Two deletes
+    if(username.length === correction.length + 2) return correction;
+    let highlighted = correction.split('');
+    for(let i = 0; i < correction.length; i++) {
+        if(correction[i] !== username[i]) {
+            if(correction.length > username.length) {
+                username = username.substring(0, i + 1) + username.substring(i, username.length);
+            }
+            if(correction.length >= username.length) {
+                highlighted[i] = '<strong>' + correction[i] + '</strong>';
+            }
+        }
+    }
+    return highlighted.join('')
 }
 
 /**
@@ -245,7 +268,11 @@ function getExisting(usernames) {
 function getDiscovered(usernames) {
     return new Promise(resolve => {
         steem.api.lookupAccountNames(usernames, async (err, res) => {
-            if(err) return resolve(await getDiscovered(usernames));
+            if(err) {
+                request_nodes.push(request_nodes.shift());
+                steem.api.setOptions({ url: request_nodes[0] });
+                return resolve(await getDiscovered(usernames));
+            }
             const discovered = res.filter(user => user).map(user => user.name);
             addUsers(null, discovered);
             return resolve(discovered);
