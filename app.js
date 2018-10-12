@@ -16,7 +16,7 @@ let commentsInterval = setInterval(() => {
         // Making sure that no comment is sent while processing this one
         clearInterval(commentsInterval);
         const comment = comments.shift();
-        sendMessage(comment[0], comment[1], comment[2], comment[3]);
+        sendMessage(comment[0], comment[1], comment[2], comment[3], comment[4] || {});
     }
 }, 1000);
 
@@ -149,6 +149,7 @@ async function processMentions(body, author, permlink, type, tags) {
     let mentions = [];
     const knownUsernames = [];
     const alreadyEncountered = [];
+    const details = {};
     const mentionRegex = /(?:^|[^\w=/])@([a-z][a-z\d.-]{1,16}[a-z\d])(.|$)/gimu;
     // All variations of the author username
     const authorRegex = new RegExp(author.replace(/([a-z]+|\d+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
@@ -162,24 +163,28 @@ async function processMentions(body, author, permlink, type, tags) {
         if(!alreadyEncountered.includes(mention)) {
             alreadyEncountered.push(mention);
             const escapedMention = matches[1].replace(/\./g, '\\.');
-            const textSurroundingMentionRegex = new RegExp('(?:\\S+\\s+){0,20}\\S*@' + escapedMention + '(?:[^a-z\d]\\S*(?:\\s+\\S+){0,20}|$)', 'i');
+            const textSurroundingMentionRegex = new RegExp('(?:\\S+\\s+){0,20}\\S*@' + escapedMention + '(?:[^a-z\d]\\S*(?:\\s+\\S+){0,20}|$)', 'gi');
             const mentionInQuoteRegex = new RegExp('^> *.*@' + escapedMention + '.*|<blockquote( +cite="[^"]+")?>((?!<blockquote)[\\s\\S])*@' + escapedMention + '((?!<blockquote)[\\s\\S])*<\\/blockquote>', 'i');
             const mentionInCodeRegex = new RegExp('```[\\s\\S]*@' + escapedMention + '[\\s\\S]*```|`[^`\\r\\n\\f\\v]*@' + escapedMention + '[^`\\r\\n\\f\\v]*`|<code>[\\s\\S]*@' + escapedMention + '[\\s\\S]*<\\/code>', 'i');
             const mentionInLinkedPostTitleRegex = new RegExp('\\[([^\\]]*@' + escapedMention + '[^\\]]*)]\\([^)]*\\/@([a-z][a-z\\d.-]{1,14}[a-z\\d])\\/([a-z0-9-]+)\\)|<a +href="[^"]*\\/@?([a-z][a-z\\d.-]{1,14}[a-z\\d])\\/([a-z0-9-]+)" *>((?:(?!<\\/a>).)*@' + escapedMention + '(?:(?!<\\/a>).)*)<\\/a>', 'i');
+            const socialNetworksRegex = /(insta|tele)gram|tw(it?ter|eet)|facebook|golos|whaleshares?|discord|medium|minds|brunch|unsplash|텔레그램|[^a-z](ig|rt|fb|ws|eos)[^a-z]|t.(me|co)\//i;
             // True if not ignored, not part of a word/url, not a variation of the author username, not in a code block, not in a quote and not ending with an image/domain extension
             if(!ignoredMentions.includes(mention) && !/[\w/(]/.test(matches[2]) && mention.match(authorRegex).every(match => !match) && !mentionInCodeRegex.test(body) && !mentionInQuoteRegex.test(body) && !imageOrDomainRegex.test(mention)) {
                 // Adding the username to the mentions array only if it doesn't contain a social network reference in the 40 words surrounding it
-                let match = body.match(textSurroundingMentionRegex);
-                if(match && !/(insta|tele)gram|tw(it?ter|eet)|facebook|golos|whaleshares?|discord|medium|minds|brunch|unsplash|텔레그램|[^a-z](ig|rt|fb|ws|eos)[^a-z]|t.(me|co)\//i.test(match[0])) {
+                const surrounding = body.match(textSurroundingMentionRegex);
+                if(surrounding && surrounding.every(text => !socialNetworksRegex.test(text))) {
                     // Adding the username to the mentions array only if it isn't part of the title of a post linked in the checked post
-                    match = body.match(mentionInLinkedPostTitleRegex);
+                    const match = body.match(mentionInLinkedPostTitleRegex);
                     if(match) {
                         // Matches are mapped as follows: 1-6 = title    2-4 = author    3-5 = permlink
                         if(kebabCase(match[1] || match[6]) === kebabCase(match[3] || match[5])) continue;
                         const linkedPost = await steem.api.getContentAsync(match[2] || match[4], match[3] || match[5]);
                         if(linkedPost && kebabCase(match[1] || match[6]) === kebabCase(linkedPost.title)) continue;
                     }
-                    mentions.push(mention);   
+                    details[mention] = (details[mention] || []).concat(
+                        surrounding.map(text => '<blockquote>' + text.replace(new RegExp('@' + mention, 'gi'), '<strong>$&</strong>') + '</blockquote>')
+                    );
+                    mentions.push(mention);
                 }
             }
         }
@@ -190,6 +195,7 @@ async function processMentions(body, author, permlink, type, tags) {
         mentions = mentions.filter(mention => {
             if(existingUsernames.includes(mention)) {
                 if(mention !== author) knownUsernames.push(mention);
+                delete details[mention];
                 return false;
             }
             return true;
@@ -218,7 +224,7 @@ async function processMentions(body, author, permlink, type, tags) {
                         }
                         message += ` and @${ mentions[mentions.length - 1]} don't exist on Steem. ${ lastSentence } ?`;
                     } else message += ` doesn't exist on Steem. ${ suggestions[0] ? 'Did you mean to write ' + suggestions[0] : 'Maybe you made a typo' } ?`;
-                    comments.push([message, author, permlink, 'Possible wrong mentions found']);
+                    comments.push([message, author, permlink, 'Possible wrong mentions found', details]);
                 });
         }
     } else usernameChecker.addMentioned(author, knownUsernames);
@@ -312,11 +318,13 @@ async function processCommand(command, params, target, author, permlink) {
  * @param {string} author The author of the post
  * @param {string} permlink The permlink of the post
  * @param {string} title The title of the message to broadcast
+ * @param {object} details The details about where the wrong mentions have been found
  */
-function sendMessage(message, author, permlink, title) {
+function sendMessage(message, author, permlink, title, details) {
     if(title.length > 255) title = title.slice(0, 252) + '...';
     const metadata = {
         app: 'checky/' + version,
+        details,
         format: 'markdown',
         tags: [ 
             'mentions',
