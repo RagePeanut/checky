@@ -36,7 +36,6 @@ function stream() {
                     case 'comment':
                         const author = operation[1].author;
                         const parentAuthor = operation[1].parent_author;
-                        const body = operation[1].body;
                         const permlink = operation[1].permlink;
     
                         usernameChecker.addUsers(author, parentAuthor);
@@ -45,10 +44,10 @@ function stream() {
     
                         if(parentAuthor === 'checky') {
                             // Parsing the command from the comment
-                            const command = /^(?:^|\(for\s*:\s*@?([A-Za-z0-9.-]+)\))(?:\s*)!([A-Za-z]+)(?:\s+(.+))?/.exec(body);
+                            const command = /^(?:^|\(for\s*:\s*@?([A-Za-z0-9.-]+)\))(?:\s*)!([A-Za-z]+)(?:\s+(.+))?/.exec(operation[1].body);
                             if(command) {
                                 if(!command[1] || author !== 'ragepeanut') command[1] = author;
-                                processCommand(command[2], command[3], command[1], author, permlink);
+                                processCommand(command[2], command[3], command[1], author, permlink, operation[1].parent_permlink);
                             }
                         } else if(parentAuthor === '' && mode !== 'off' || mode === 'advanced') {
                             try {
@@ -96,22 +95,37 @@ function stream() {
 }
 
 /**
- * Checks that the comment operation is for a new post and calls processMentions
+ * Gets the content of a post
+ * @param {string} author The author of the post
+ * @param {string} permlink The permlink of the post
+ * @return {Promise<any>} The content of the post
+ */
+function getContent(author, permlink) {
+    return new Promise(resolve => {
+        steem.api.getContent(author, permlink, (err, content) => {
+            if(err) {
+                console.error(`Request error (getContent): ${ err.message } with ${ request_nodes[0] }`);
+                // Putting the node where the error comes from at the end of the array
+                request_nodes.push(request_nodes.shift());
+                steem.api.setOptions({ url: request_nodes[0] });
+                console.log(`Retrying with ${ request_nodes[0] }`);
+                return resolve(getContent(author, permlink));
+            }
+            resolve(content);
+        });
+    })
+}
+
+/**
+ * Calls processMentions after a certain delay set by the author
  * @param {string} author The author of the post
  * @param {string} permlink The permlink of the post
  * @param {boolean} mustBeNew Post must be new (true) or can have been updated (false)
  */
 function processPost(author, permlink, mustBeNew) {
-    steem.api.getContent(author, permlink, (err, res) => {
-        if(err) {
-            console.error(`Request error (getContent): ${ err.message } with ${ request_nodes[0] }`);
-            // Putting the node where the error comes from at the end of the array
-            request_nodes.push(request_nodes.shift());
-            steem.api.setOptions({ url: request_nodes[0] });
-            console.log(`Retrying with ${ request_nodes[0] }`);
-            processPost(author, permlink, mustBeNew);
-        } else {
-            if(mustBeNew && res.last_update === res.created) {
+    getContent(author, permlink)
+        .then(content => {
+            if(mustBeNew && content.last_update === content.created) {
                 const delay = usernameChecker.getUser(author).delay;
                 if(delay > 0) {
                     setTimeout(() => { 
@@ -121,20 +135,19 @@ function processPost(author, permlink, mustBeNew) {
             }
             if(!mustBeNew) {
                 try {
-                    const metadata = JSON.parse(res.json_metadata);
+                    const metadata = JSON.parse(content.json_metadata);
                     if(!metadata) throw new Error('The metadata is ' + metadata);
                     if(typeof metadata !== 'object') throw new Error('The metadata isn of type ' + typeof metadata);
                     if(!metadata.tags) throw new Error('The tags property is ' + metadata.tags);
                     if(!Array.isArray(metadata.tags)) throw new Error('The tags property isn\'t an array');
                     if(!metadata.app || typeof metadata.app !== 'string' || !/share2steem/.test(metadata.app)) {
-                        processMentions(res.body, author, permlink, res.parent_author === '' ? 'post' : 'comment', metadata.tags);
+                        processMentions(content.body, author, permlink, content.parent_author === '' ? 'post' : 'comment', metadata.tags);
                     }
                 } catch(e) {
-                    processMentions(res.body, author, permlink, res.parent_author === '' ? 'post' : 'comment', []);
+                    processMentions(content.body, author, permlink, content.parent_author === '' ? 'post' : 'comment', []);
                 }
             }
-        }
-    });
+        });
 }
 
 /**
@@ -150,7 +163,7 @@ async function processMentions(body, author, permlink, type, tags) {
     const knownUsernames = [];
     const alreadyEncountered = [];
     const details = {};
-    const mentionRegex = /(?:^|[^\w=/])@([a-z][a-z\d.-]{1,16}[a-z\d])(.|$)/gimu;
+    const mentionRegex = /(?:^|[^\w=/])@([a-z][a-z\d.-]{1,16}[a-z\d])(?![\w/(])/gimu;
     // All variations of the author username
     const authorRegex = new RegExp(author.replace(/([a-z]+|\d+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
     const imageOrDomainRegex = /\.(jpe?g|png|gif|com?|io|org|net|me)$/;
@@ -169,7 +182,7 @@ async function processMentions(body, author, permlink, type, tags) {
             const mentionInLinkedPostTitleRegex = new RegExp('\\[([^\\]]*@' + escapedMention + '[^\\]]*)]\\([^)]*\\/@([a-z][a-z\\d.-]{1,14}[a-z\\d])\\/([a-z0-9-]+)\\)|<a +href="[^"]*\\/@?([a-z][a-z\\d.-]{1,14}[a-z\\d])\\/([a-z0-9-]+)" *>((?:(?!<\\/a>).)*@' + escapedMention + '(?:(?!<\\/a>).)*)<\\/a>', 'i');
             const socialNetworksRegex = /(insta|tele)gram|tw(it?ter|eet)|facebook|golos|whaleshares?|discord|medium|minds|brunch|unsplash|텔레그램|[^a-z](ig|rt|fb|ws|eos)[^a-z]|t.(me|co)\//i;
             // True if not ignored, not part of a word/url, not a variation of the author username, not in a code block, not in a quote and not ending with an image/domain extension
-            if(!ignoredMentions.includes(mention) && !/[\w/(]/.test(matches[2]) && mention.match(authorRegex).every(match => !match) && !mentionInCodeRegex.test(body) && !mentionInQuoteRegex.test(body) && !imageOrDomainRegex.test(mention)) {
+            if(!ignoredMentions.includes(mention) && mention.match(authorRegex).every(match => !match) && !mentionInCodeRegex.test(body) && !mentionInQuoteRegex.test(body) && !imageOrDomainRegex.test(mention)) {
                 // Adding the username to the mentions array only if it doesn't contain a social network reference in the 40 words surrounding it
                 const surrounding = body.match(textSurroundingMentionRegex);
                 if(surrounding && surrounding.every(text => !socialNetworksRegex.test(text))) {
@@ -178,11 +191,14 @@ async function processMentions(body, author, permlink, type, tags) {
                     if(match) {
                         // Matches are mapped as follows: 1-6 = title    2-4 = author    3-5 = permlink
                         if(kebabCase(match[1] || match[6]) === kebabCase(match[3] || match[5])) continue;
-                        const linkedPost = await steem.api.getContentAsync(match[2] || match[4], match[3] || match[5]);
+                        const linkedPost = await getContent(match[2] || match[4], match[3] || match[5]);
                         if(linkedPost && kebabCase(match[1] || match[6]) === kebabCase(linkedPost.title)) continue;
                     }
                     details[mention] = (details[mention] || []).concat(
-                        surrounding.map(text => '<blockquote>' + text.replace(new RegExp('@' + mention, 'gi'), '<strong>$&</strong>') + '</blockquote>')
+                        surrounding.map(text => text.replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+                                                    .replace(mentionRegex, '@<em></em>$1')
+                                                    .replace(new RegExp('@<em></em>' + mention, 'gi'), '<strong>$&</strong>')
+                                                    .replace(/^ */gm, '> '))
                     );
                     mentions.push(mention);
                 }
@@ -237,8 +253,9 @@ async function processMentions(body, author, permlink, type, tags) {
  * @param {string} target The user the command applies to
  * @param {string} author The user who wrote the command
  * @param {string} permlink The permlink of the comment in which the command has been written
+ * @param {string} parent_permlink The permlink of @checky's comment
  */
-async function processCommand(command, params, target, author, permlink) {
+async function processCommand(command, params, target, author, permlink, parent_permlink) {
     if(!(await usernameChecker.exists(target))) comments.push(['The target user doesn\'t exist on the Steem blockchain. Maybe you made a typo ?', author, permlink, 'Possible wrong target username']);
     else {
         const targetData = usernameChecker.getUser(target);
@@ -302,6 +319,30 @@ async function processCommand(command, params, target, author, permlink) {
                     } else comments.push(['You didn\'t correctly specify the delay. Please try again by using a number to represent the delay.', author, permlink, `Delay wrongly specified`]);
                 } else comments.push([`You didn't specify the delay. Please try again by using \`!${ command } minutes`, author, permlink, 'No delay specified']);
                 break;
+            case 'surrounding':
+            case 'details':
+                const content = await getContent('checky', parent_permlink);
+                let details;
+                try {
+                    details = JSON.parse(content.json_metadata).details;
+                } catch(e) {
+                    details = null;
+                }
+                if(!details || Object.keys(details).length === 0) comments.push(['You can only use this command under @checky\'s suggestion comments.', author, permlink, 'Details unreachable']);
+                else {
+                    const detailsKeys = Object.keys(details);
+                    const mentions = params ? params.split(/[\s,]+/).filter(param => detailsKeys.includes(param)) : detailsKeys;
+                    if(mentions.length === 0) comments.push(['You didn\'t specify any wrong mention.', author, permlink, 'No wrong mention specified']);
+                    else {
+                        let message = 'Here are the details you requested:';
+                        mentions.forEach(mention => {
+                            message += '\n\n**@<em></em>' + mention + '**';
+                            details.mention.forEach(surrounding => message += '\n\n' + surrounding);
+                        });
+                        comments.push([message, author, permlink, 'Details']);
+                    }
+                }
+                break;
             case 'help':
                 const message = '#### Here are all the available commands:\n* **!delay** *minutes* **-** tells the bot to wait X minutes before checking your posts.\n* **!help** **-** gives a list of commands and their explanations.\n* **!ignore** *username1* *username2* **-** tells the bot to ignore some usernames mentioned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).\n* **!mode** *[regular-advanced-off]* **-** sets the mentions checking to regular (only posts), advanced (posts and comments) or off (no checking). Alternatively, you can write *normal* or *on* instead of *regular*. You can also write *plus* instead of *advanced*.\n* **!off** **-** shortcut for **!mode off**.\n* **!on** **-** shortcut for **!mode on**.\n* **!state** **-** gives the state of your account (*regular*, *advanced* or *off*).\n* **!switch** *[regular-advanced-off]* **-** same as **!mode**.\n* **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentioned in your posts.\n* **!wait** *minutes* - same as **!delay**.\n\n###### Any idea on how to improve this bot ? Please contact @ragepeanut on any of his posts or send him a direct message on Discord (RagePeanut#8078).';
                 comments.push([message, author, permlink, 'Commands list']);
@@ -318,7 +359,7 @@ async function processCommand(command, params, target, author, permlink) {
  * @param {string} author The author of the post
  * @param {string} permlink The permlink of the post
  * @param {string} title The title of the message to broadcast
- * @param {object} details The details about where the wrong mentions have been found
+ * @param {any} details The details about where the wrong mentions have been found
  */
 function sendMessage(message, author, permlink, title, details) {
     if(title.length > 255) title = title.slice(0, 252) + '...';

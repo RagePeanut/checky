@@ -140,7 +140,7 @@ function deletes(username, edits, mustBeValid) {
  * @returns {string} The correction with its differences highlighted (between strong tags)
  */
 function highlightDifferences(username, correction) {
-    // Two deletes
+    // Two deletes (deletes can't be highlighted)
     if(username.length === correction.length + 2) return correction;
     let highlighted = correction.split('');
     for(let i = 0; i < correction.length; i++) {
