@@ -1,4 +1,4 @@
-# checky (0.1.9)
+# checky (0.1.10)
 A Steem bot that checks if the users mentioned in a post exist on the blockchain. If they don't, it indicates to authors that they may have made a typo or it suggests them some existing usernames close to the wrong ones.
 
 See this bot in action here: https://steemit.com/@checky/comments
@@ -24,7 +24,7 @@ If none of the default nodes work, you can change them in the **config.json** fi
 * ***stream_nodes*** **-** contains the RPC nodes used by the app to stream operations (those can be low memory nodes).
 
 ## Commands
-The following commands must be typed in reply to one of [@checky](https://steemit.com/@checky)'s posts or comments to work.
+The following commands must be typed in reply to one of [@checky](https://steemit.com/@checky)'s posts or comments and not be preceded by any text to work.
 * **!delay** *minutes* **-** tells the bot to wait X minutes before checking your posts.
 * **!help** **-** gives a list of commands and their explanations.
 * **!ignore** *username1* *username2* **-** tells  the bot to ignore some usernames mentioned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).
@@ -35,6 +35,7 @@ The following commands must be typed in reply to one of [@checky](https://steemi
 * **!switch** *[regular-advanced-off]* **-** same as **!mode**.
 * **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentioned in your posts.
 * **!wait** *minutes* **-** same as **!delay**.
+* **!where** *username1* *username2* **-** asks the bot to show where in the post it found typos for the specified mentions. Alternatively, you can write this command with no parameters and it will show you where it found all the mentions with typos in them.
 
 ## Social networks
 **Steemit:** https://steemit.com/@ragepeanut <br>

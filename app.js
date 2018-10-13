@@ -320,8 +320,7 @@ async function processCommand(command, params, target, author, permlink, parent_
                     } else comments.push(['You didn\'t correctly specify the delay. Please try again by using a number to represent the delay.', author, permlink, `Delay wrongly specified`]);
                 } else comments.push([`You didn't specify the delay. Please try again by using \`!${ command } minutes`, author, permlink, 'No delay specified']);
                 break;
-            case 'surrounding':
-            case 'details':
+            case 'where':
                 const content = await getContent('checky', parent_permlink);
                 let details;
                 try {
@@ -332,20 +331,20 @@ async function processCommand(command, params, target, author, permlink, parent_
                 if(!details || Object.keys(details).length === 0) comments.push(['You can only use this command under @checky\'s suggestion comments.', author, permlink, 'Details unreachable']);
                 else {
                     const detailsKeys = Object.keys(details);
-                    const mentions = params ? params.split(/[\s,]+/).filter(param => detailsKeys.includes(param)) : detailsKeys;
-                    if(mentions.length === 0) comments.push(['You didn\'t specify any wrong mention.', author, permlink, 'No wrong mention specified']);
+                    const mentions = params ? params.split(/[\s,]+/).filter(mention => mention !== '').map(mention => mention.replace('@', '').toLowerCase()) : detailsKeys;
+                    if(mentions.length === 0) comments.push(['You didn\'t specify any wrong mention. This command\'s parameters must be the mentions as you typed them in your original post, not their corrections.', author, permlink, 'No wrong mention specified']);
                     else {
-                        let message = 'Here are the details you requested:';
+                        let message = '';
                         mentions.forEach(mention => {
-                            message += '\n\n**@<em></em>' + mention + '**';
-                            details.mention.forEach(surrounding => message += '\n\n' + surrounding);
+                            message += 'The mention **@<em></em>' + mention + '** has been detected in this part of the post:\n';
+                            details[mention].forEach(surrounding => message += surrounding + '\n\n');
                         });
                         comments.push([message, author, permlink, 'Details']);
                     }
                 }
                 break;
             case 'help':
-                const message = '#### Here are all the available commands:\n* **!delay** *minutes* **-** tells the bot to wait X minutes before checking your posts.\n* **!help** **-** gives a list of commands and their explanations.\n* **!ignore** *username1* *username2* **-** tells the bot to ignore some usernames mentioned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).\n* **!mode** *[regular-advanced-off]* **-** sets the mentions checking to regular (only posts), advanced (posts and comments) or off (no checking). Alternatively, you can write *normal* or *on* instead of *regular*. You can also write *plus* instead of *advanced*.\n* **!off** **-** shortcut for **!mode off**.\n* **!on** **-** shortcut for **!mode on**.\n* **!state** **-** gives the state of your account (*regular*, *advanced* or *off*).\n* **!switch** *[regular-advanced-off]* **-** same as **!mode**.\n* **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentioned in your posts.\n* **!wait** *minutes* - same as **!delay**.\n\n###### Any idea on how to improve this bot ? Please contact @ragepeanut on any of his posts or send him a direct message on Discord (RagePeanut#8078).';
+                const message = '#### Here are all the available commands:\n* **!delay** *minutes* **-** tells the bot to wait X minutes before checking your posts.\n* **!help** **-** gives a list of commands and their explanations.\n* **!ignore** *username1* *username2* **-** tells the bot to ignore some usernames mentioned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).\n* **!mode** *[regular-advanced-off]* **-** sets the mentions checking to regular (only posts), advanced (posts and comments) or off (no checking). Alternatively, you can write *normal* or *on* instead of *regular*. You can also write *plus* instead of *advanced*.\n* **!off** **-** shortcut for **!mode off**.\n* **!on** **-** shortcut for **!mode on**.\n* **!state** **-** gives the state of your account (*regular*, *advanced* or *off*).\n* **!switch** *[regular-advanced-off]* **-** same as **!mode**.\n* **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentioned in your posts.\n* **!wait** *minutes* **-** same as **!delay**.\n* **!where** *username1* *username2* **-** asks the bot to show where in the post it found typos for the specified mentions. Alternatively, you can write this command with no parameters and it will show you where it found all the mentions with typos in them.\n\n###### Any idea on how to improve this bot ? Please contact @ragepeanut on any of his posts or send him a direct message on Discord (RagePeanut#8078).';
                 comments.push([message, author, permlink, 'Commands list']);
                 break;
             default:
