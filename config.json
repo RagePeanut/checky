@@ -1,4 +1,5 @@
 {
+    "log_errors": false,
     "request_nodes": [
         "https://api.steemit.com",
         "https://api.steem.house",

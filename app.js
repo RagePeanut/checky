@@ -2,7 +2,7 @@ const steem = require('steem');
 const steemStream = require('steem');
 const usernameChecker = require('./utils/username-checker');
 const { kebabCase, trim, uniqCompact } = require('./utils/helper');
-const { request_nodes, stream_nodes } = require('./config');
+const { log_errors, request_nodes, stream_nodes } = require('./config');
 const { version } = require('./package');
 
 const postingKey = process.env.CHECKY_POSTING_KEY;
@@ -87,7 +87,7 @@ function stream() {
             }
         });
     }).catch(error => {
-        console.error(`Stream error: ${ error.message } with ${ stream_nodes[0] }`);
+        if(log_errors) console.error(`Stream error: ${ error.message } with ${ stream_nodes[0] }`);
         // Putting the node where the error comes from at the end of the array
         stream_nodes.push(stream_nodes.shift());
         stream();
@@ -104,11 +104,11 @@ function getContent(author, permlink) {
     return new Promise(resolve => {
         steem.api.getContent(author, permlink, (err, content) => {
             if(err) {
-                console.error(`Request error (getContent): ${ err.message } with ${ request_nodes[0] }`);
+                if(log_errors) console.error(`Request error (getContent): ${ err.message } with ${ request_nodes[0] }`);
                 // Putting the node where the error comes from at the end of the array
                 request_nodes.push(request_nodes.shift());
                 steem.api.setOptions({ url: request_nodes[0] });
-                console.log(`Retrying with ${ request_nodes[0] }`);
+                if(log_errors) console.log(`Retrying with ${ request_nodes[0] }`);
                 return resolve(getContent(author, permlink));
             }
             resolve(content);
@@ -163,7 +163,7 @@ async function processMentions(body, author, permlink, type, tags) {
     const knownUsernames = [];
     const alreadyEncountered = [];
     const details = {};
-    const mentionRegex = /(?:^|[^\w=/])@([a-z][a-z\d.-]{1,16}[a-z\d])(?![\w/(])/gimu;
+    const mentionRegex = /(^|[^\w=/])@([a-z][a-z\d.-]{1,16}[a-z\d])(?![\w/(])/gimu;
     // All variations of the author username
     const authorRegex = new RegExp(author.replace(/([a-z]+|\d+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
     const imageOrDomainRegex = /\.(jpe?g|png|gif|com?|io|org|net|me)$/;
@@ -171,12 +171,12 @@ async function processMentions(body, author, permlink, type, tags) {
     let matches = [];
     while(matches = mentionRegex.exec(body)) {
         // If the mention contains adjacent dots, taking only the part before those dots
-        const mention = matches[1].split(/\.{2,}/)[0].toLowerCase();
+        const mention = matches[2].split(/\.{2,}/)[0].toLowerCase();
         // Avoiding to repeat the checking for mentions already encountered in the post
         if(!alreadyEncountered.includes(mention)) {
             alreadyEncountered.push(mention);
-            const escapedMention = matches[1].replace(/\./g, '\\.');
-            const textSurroundingMentionRegex = new RegExp('(?:\\S+\\s+){0,20}\\S*@' + escapedMention + '(?:[^a-z\d]\\S*(?:\\s+\\S+){0,20}|$)', 'gi');
+            const escapedMention = matches[2].replace(/\./g, '\\.');
+            const textSurroundingMentionRegex = new RegExp('(?:\\S+\\s+){0,15}\\S*@' + escapedMention + '(?:[^a-z\d]\\S*(?:\\s+\\S+){0,15}|$)', 'gi');
             const mentionInQuoteRegex = new RegExp('^> *.*@' + escapedMention + '.*|<blockquote( +cite="[^"]+")?>((?!<blockquote)[\\s\\S])*@' + escapedMention + '((?!<blockquote)[\\s\\S])*<\\/blockquote>', 'i');
             const mentionInCodeRegex = new RegExp('```[\\s\\S]*@' + escapedMention + '[\\s\\S]*```|`[^`\\r\\n\\f\\v]*@' + escapedMention + '[^`\\r\\n\\f\\v]*`|<code>[\\s\\S]*@' + escapedMention + '[\\s\\S]*<\\/code>', 'i');
             const mentionInLinkedPostTitleRegex = new RegExp('\\[([^\\]]*@' + escapedMention + '[^\\]]*)]\\([^)]*\\/@([a-z][a-z\\d.-]{1,14}[a-z\\d])\\/([a-z0-9-]+)\\)|<a +href="[^"]*\\/@?([a-z][a-z\\d.-]{1,14}[a-z\\d])\\/([a-z0-9-]+)" *>((?:(?!<\\/a>).)*@' + escapedMention + '(?:(?!<\\/a>).)*)<\\/a>', 'i');
@@ -197,7 +197,7 @@ async function processMentions(body, author, permlink, type, tags) {
                     }
                     details[mention] = (details[mention] || []).concat(
                         surrounding.map(text => text.replace(/!\[[^\]]*\]\([^)]*\)/g, '')
-                                                    .replace(mentionRegex, '@<em></em>$1')
+                                                    .replace(mentionRegex, '$1@<em></em>$2')
                                                     .replace(new RegExp('@<em></em>' + mention, 'gi'), '<strong>$&</strong>')
                                                     .replace(/^ */gm, '> '))
                     );
@@ -377,11 +377,11 @@ function sendMessage(message, author, permlink, title, details) {
     const footer = '\n\n###### If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with `!help`.';
     steem.broadcast.comment(postingKey, author, permlink, 'checky', 're-' + author.replace(/\./g, '') + '-' + permlink, title, message + footer, JSON.stringify(metadata), function(err) {
         if(err) {
-            console.error(`Broadcast error: ${ err.message } with ${ request_nodes[0] }`);
+            if(log_errors) console.error(`Broadcast error: ${ err.message } with ${ request_nodes[0] }`);
             // Putting the node where the error comes from at the end of the array
             request_nodes.push(request_nodes.shift());
             steem.api.setOptions({ url: request_nodes[0] });
-            console.log(`Retrying with ${ request_nodes[0] }`);
+            if(log_errors) console.log(`Retrying with ${ request_nodes[0] }`);
             sendMessage(message, author, permlink, title);
         } else {
             // Making sure that the 20 seconds delay between comments is respected

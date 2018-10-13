@@ -1,6 +1,6 @@
 const fs = require('fs');
 const steem = require('steem');
-const { request_nodes } = require('../config');
+const { log_errors, request_nodes } = require('../config');
 const { merge } = require('./helper');
 
 const unallowedUsernameRegex = /(^|\.)[\d.-]|[.-](\.|$)|-{2}|.{17}|(^|\.).{0,2}(\.|$)/;
@@ -269,8 +269,11 @@ function getDiscovered(usernames) {
     return new Promise(resolve => {
         steem.api.lookupAccountNames(usernames, async (err, res) => {
             if(err) {
+                if(log_errors) console.error(`Request error (lookupAccountNames): ${ err.message } with ${ request_nodes[0] }`);
+                // Putting the node where the error comes from at the end of the array
                 request_nodes.push(request_nodes.shift());
                 steem.api.setOptions({ url: request_nodes[0] });
+                if(log_errors) console.log(`Retrying with ${ request_nodes[0] }`);
                 return resolve(await getDiscovered(usernames));
             }
             const discovered = res.filter(user => user).map(user => user.name);
@@ -318,7 +321,7 @@ function setMode(username, mode) {
  */
 function updateUsersFile(interval) {
     fs.writeFile('data/users.json', JSON.stringify(users), err => {
-        if(err) console.error(err.message);
+        if(err && log_errors) console.error(err.message);
         setTimeout(updateUsersFile, interval * 1000, interval);
     })
 }
