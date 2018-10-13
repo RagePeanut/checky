@@ -180,9 +180,10 @@ async function processMentions(body, author, permlink, type, tags) {
             const mentionInQuoteRegex = new RegExp('^> *.*@' + escapedMention + '.*|<blockquote( +cite="[^"]+")?>((?!<blockquote)[\\s\\S])*@' + escapedMention + '((?!<blockquote)[\\s\\S])*<\\/blockquote>', 'i');
             const mentionInCodeRegex = new RegExp('```[\\s\\S]*@' + escapedMention + '[\\s\\S]*```|`[^`\\r\\n\\f\\v]*@' + escapedMention + '[^`\\r\\n\\f\\v]*`|<code>[\\s\\S]*@' + escapedMention + '[\\s\\S]*<\\/code>', 'i');
             const mentionInLinkedPostTitleRegex = new RegExp('\\[([^\\]]*@' + escapedMention + '[^\\]]*)]\\([^)]*\\/@([a-z][a-z\\d.-]{1,14}[a-z\\d])\\/([a-z0-9-]+)\\)|<a +href="[^"]*\\/@?([a-z][a-z\\d.-]{1,14}[a-z\\d])\\/([a-z0-9-]+)" *>((?:(?!<\\/a>).)*@' + escapedMention + '(?:(?!<\\/a>).)*)<\\/a>', 'i');
+            const mentionInImageAltRegex = new RegExp('!\\[[^\\]]*@' + escapedMention + '[^\\]]*]\\([^)]*\\)|<img [^>]*alt="[^"]*@' + escapedMention + '[^"]*"[^>]*>', 'i');
             const socialNetworksRegex = /(insta|tele)gram|tw(it?ter|eet)|facebook|golos|whaleshares?|discord|medium|minds|brunch|unsplash|텔레그램|[^a-z](ig|rt|fb|ws|eos)[^a-z]|t.(me|co)\//i;
             // True if not ignored, not part of a word/url, not a variation of the author username, not in a code block, not in a quote and not ending with an image/domain extension
-            if(!ignoredMentions.includes(mention) && mention.match(authorRegex).every(match => !match) && !mentionInCodeRegex.test(body) && !mentionInQuoteRegex.test(body) && !imageOrDomainRegex.test(mention)) {
+            if(!ignoredMentions.includes(mention) && mention.match(authorRegex).every(match => !match) && !mentionInCodeRegex.test(body) && !mentionInQuoteRegex.test(body) && !mentionInImageAltRegex.test(body) && !imageOrDomainRegex.test(mention)) {
                 // Adding the username to the mentions array only if it doesn't contain a social network reference in the 40 words surrounding it
                 const surrounding = body.match(textSurroundingMentionRegex);
                 if(surrounding && surrounding.every(text => !socialNetworksRegex.test(text))) {
