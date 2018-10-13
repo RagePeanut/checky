@@ -14,9 +14,10 @@ const comments = [];
 let commentsInterval = setInterval(() => {
     if(comments[0]) {
         // Making sure that no comment is sent while processing this one
-        clearInterval(commentsInterval);
+        // clearInterval(commentsInterval);
         const comment = comments.shift();
-        sendMessage(comment[0], comment[1], comment[2], comment[3], comment[4] || {});
+        console.log(comment);
+        // sendMessage(comment[0], comment[1], comment[2], comment[3], comment[4] || {});
     }
 }, 1000);
 
@@ -331,7 +332,7 @@ async function processCommand(command, params, target, author, permlink, parent_
                 if(!details || Object.keys(details).length === 0) comments.push(['You can only use this command under @checky\'s suggestion comments.', author, permlink, 'Details unreachable']);
                 else {
                     const detailsKeys = Object.keys(details);
-                    const mentions = params ? params.split(/[\s,]+/).filter(mention => mention !== '').map(mention => mention.replace('@', '').toLowerCase()) : detailsKeys;
+                    const mentions = params ? params.split(/[\s,]+/).filter(param => detailsKeys.includes(param)).filter(mention => mention !== '').map(mention => mention.replace('@', '').toLowerCase()) : detailsKeys;
                     if(mentions.length === 0) comments.push(['You didn\'t specify any wrong mention. This command\'s parameters must be the mentions as you typed them in your original post, not their corrections.', author, permlink, 'No wrong mention specified']);
                     else {
                         let message = '';
