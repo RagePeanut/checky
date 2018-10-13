@@ -2,7 +2,7 @@ const steem = require('steem');
 const steemStream = require('steem');
 const usernameChecker = require('./utils/username-checker');
 const { kebabCase, trim, uniqCompact } = require('./utils/helper');
-const { log_errors, request_nodes, stream_nodes } = require('./config');
+const { log_errors, request_nodes, stream_nodes, test_environment} = require('./config');
 const { version } = require('./package');
 
 const postingKey = process.env.CHECKY_POSTING_KEY;
@@ -13,11 +13,14 @@ const comments = [];
 // Checking every second if a comment has to be sent and sending it
 let commentsInterval = setInterval(() => {
     if(comments[0]) {
-        // Making sure that no comment is sent while processing this one
-        // clearInterval(commentsInterval);
-        const comment = comments.shift();
-        console.log(comment);
-        // sendMessage(comment[0], comment[1], comment[2], comment[3], comment[4] || {});
+        if(test_environment) {
+            console.log(comments.shift());
+        } else {
+            // Making sure that no comment is sent while processing this one
+            clearInterval(commentsInterval);
+            const comment = comments.shift();
+            sendMessage(comment[0], comment[1], comment[2], comment[3], comment[4] || {});
+        }
     }
 }, 1000);
 

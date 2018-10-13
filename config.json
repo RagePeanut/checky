@@ -12,5 +12,6 @@
         "https://rpc.buildteam.io",
         "https://rpc.steemviz.com",
         "https://steemd.minnowsupportproject.org"
-    ]
+    ],
+    "test_environment": false
 }
