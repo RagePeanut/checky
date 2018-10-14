@@ -207,7 +207,7 @@ async function processMentions(body, author, permlink, type, tags) {
                     details[mention] = (details[mention] || []).concat(
                         surrounding.map(text => text.replace(/!\[[^\]]*\]\([^)]*\)/g, '')
                                                     .replace(mentionRegex, '$1@<em></em>$2')
-                                                    .replace(new RegExp('@<em></em>' + mention, 'gi'), '<strong>$&</strong>')
+                                                    .replace(new RegExp('@<em></em>' + mention + '(?![\\w/(]|\\.[a-z])', 'gi'), '<strong>$&</strong>')
                                                     .replace(/^ */gm, '> '))
                     );
                     mentions.push(mention);
