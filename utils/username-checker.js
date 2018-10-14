@@ -1,11 +1,10 @@
 const fs = require('fs');
 const steem = require('steem');
-let { log_errors, request_nodes } = require('../config');
+const { log_errors } = require('../config');
 const { merge } = require('./helper');
+let requestNodes;
 
 const unallowedUsernameRegex = /(^|\.)[\d.-]|[.-](\.|$)|-{2}|.{17}|(^|\.).{0,2}(\.|$)/;
-
-steem.api.setOptions({ url: request_nodes[0] });
 
 // Creating a users object and updating it with the content of ./data/users.json if the file exists 
 let users = {};
@@ -197,11 +196,11 @@ function isTag(author, word, tags) {
         return new Promise(resolve => {
             steem.api.getTrendingTags('', 1000, (err, tags) => {
                 if(err) {
-                    if(log_errors) console.error(`Request error (getTrendingTags): ${ err.message } with ${ request_nodes[0] }`);
+                    if(log_errors) console.error(`Request error (getTrendingTags): ${ err.message } with ${ requestNodes[0] }`);
                     // Putting the node where the error comes from at the end of the array
-                    request_nodes.push(request_nodes.shift());
-                    steem.api.setOptions({ url: request_nodes[0] });
-                    if(log_errors) console.log(`Retrying with ${ request_nodes[0] }`);
+                    requestNodes.push(requestNodes.shift());
+                    steem.api.setOptions({ url: requestNodes[0] });
+                    if(log_errors) console.log(`Retrying with ${ requestNodes[0] }`);
                     return resolve(isTrendingTag());
                 }
                 if(tags.some(tag => tag.name === word)) return resolve(true);
@@ -218,11 +217,11 @@ function isTag(author, word, tags) {
         return new Promise(resolve => {
             steem.api.getTagsUsedByAuthor(author, (err, tags) => {
                 if(err) {
-                    if(log_errors) console.error(`Request error (getTagsUsedByAuthor): ${ err.message } with ${ request_nodes[0] }`);
+                    if(log_errors) console.error(`Request error (getTagsUsedByAuthor): ${ err.message } with ${ requestNodes[0] }`);
                     // Putting the node where the error comes from at the end of the array
-                    request_nodes.push(request_nodes.shift());
-                    steem.api.setOptions({ url: request_nodes[0] });
-                    if(log_errors) console.log(`Retrying with ${ request_nodes[0] }`);
+                    requestNodes.push(requestNodes.shift());
+                    steem.api.setOptions({ url: requestNodes[0] });
+                    if(log_errors) console.log(`Retrying with ${ requestNodes[0] }`);
                     return resolve(isTagUsedByAuthor());
                 }
                 // Not sure how the array items are structured
@@ -328,11 +327,11 @@ function getDiscovered(usernames) {
     return new Promise(resolve => {
         steem.api.lookupAccountNames(usernames, (err, res) => {
             if(err) {
-                if(log_errors) console.error(`Request error (lookupAccountNames): ${ err.message } with ${ request_nodes[0] }`);
+                if(log_errors) console.error(`Request error (lookupAccountNames): ${ err.message } with ${ requestNodes[0] }`);
                 // Putting the node where the error comes from at the end of the array
-                request_nodes.push(request_nodes.shift());
-                steem.api.setOptions({ url: request_nodes[0] });
-                if(log_errors) console.log(`Retrying with ${ request_nodes[0] }`);
+                requestNodes.push(requestNodes.shift());
+                steem.api.setOptions({ url: requestNodes[0] });
+                if(log_errors) console.log(`Retrying with ${ requestNodes[0] }`);
                 return resolve(getDiscovered(usernames));
             }
             const discovered = res.filter(user => user).map(user => user.name);
@@ -379,7 +378,7 @@ function setMode(username, mode) {
  * @param {string[]} nodes The new nodes 
  */
 function updateNodes(nodes) {
-    request_nodes = nodes;
+    requestNodes = nodes;
     steem.api.setOptions({ url: nodes[0] });
 }
 

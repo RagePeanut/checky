@@ -1,17 +1,4 @@
 {
     "log_errors": false,
-    "request_nodes": [
-        "https://api.steemit.com",
-        "https://api.steem.house",
-        "https://gtg.steem.house:8090",
-        "https://api.steem.house",
-        "https://rpc.curiesteem.com"
-    ],
-    "stream_nodes": [
-        "https://api.steemit.com",
-        "https://rpc.buildteam.io",
-        "https://rpc.steemviz.com",
-        "https://steemd.minnowsupportproject.org"
-    ],
     "test_environment": false
 }

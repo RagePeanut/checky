@@ -3,7 +3,6 @@ const steemStream = require('steem');
 const usernameChecker = require('./utils/username-checker');
 const { kebabCase, trim, uniqCompact } = require('./utils/helper');
 const { log_errors, test_environment} = require('./config');
-let { request_nodes, stream_nodes } = require('./config');
 const { version } = require('./package');
 
 const postingKey = process.env.CHECKY_POSTING_KEY;
@@ -12,6 +11,7 @@ const comments = [];
 // Checking every second if a comment has to be sent and sending it
 let commentsInterval = setInterval(prepareComment, 1000);
 
+let requestNodes, streamNodes;
 updateNodes().then(_ => {
     stream();
     setInterval(updateNodes, 3 * 60 * 60 * 1000);
@@ -21,9 +21,9 @@ updateNodes().then(_ => {
  * Streams operations from the blockchain and calls processCreatedPost or processCommand when necessary
  */
 function stream() {
-    steemStream.api.setOptions({ url: stream_nodes[0] });
+    steemStream.api.setOptions({ url: streamNodes[0] });
     new Promise((_, reject) => {
-        console.log('Stream started with', stream_nodes[0]);
+        console.log('Stream started with', streamNodes[0]);
         steemStream.api.streamOperations((err, operation) => {
             if(err) return reject(err);
             if(operation) {
@@ -82,9 +82,9 @@ function stream() {
             }
         });
     }).catch(error => {
-        if(log_errors) console.error(`Stream error: ${ error.message } with ${ stream_nodes[0] }`);
+        if(log_errors) console.error(`Stream error: ${ error.message } with ${ streamNodes[0] }`);
         // Putting the node where the error comes from at the end of the array
-        stream_nodes.push(stream_nodes.shift());
+        streamNodes.push(streamNodes.shift());
         stream();
     });
 }
@@ -99,11 +99,11 @@ function getContent(author, permlink) {
     return new Promise(resolve => {
         steem.api.getContent(author, permlink, (err, content) => {
             if(err) {
-                if(log_errors) console.error(`Request error (getContent): ${ err.message } with ${ request_nodes[0] }`);
+                if(log_errors) console.error(`Request error (getContent): ${ err.message } with ${ requestNodes[0] }`);
                 // Putting the node where the error comes from at the end of the array
-                request_nodes.push(request_nodes.shift());
-                steem.api.setOptions({ url: request_nodes[0] });
-                if(log_errors) console.log(`Retrying with ${ request_nodes[0] }`);
+                requestNodes.push(requestNodes.shift());
+                steem.api.setOptions({ url: requestNodes[0] });
+                if(log_errors) console.log(`Retrying with ${ requestNodes[0] }`);
                 return resolve(getContent(author, permlink));
             }
             resolve(content);
@@ -174,7 +174,7 @@ async function processMentions(body, author, permlink, type, tags) {
     const knownUsernames = [];
     const alreadyEncountered = [];
     const details = {};
-    const mentionRegex = /(^|[^\w=/])@([a-z][a-z\d.-]{1,16}[a-z\d])(?![\w/(]|\.[a-z])/gmu;
+    const mentionRegex = /(^|[^\w=/#])@([a-z][a-z\d.-]{1,16}[a-z\d])(?![\w(]|\.[a-z])/gmu;
     // All variations of the author username
     const authorRegex = new RegExp(author.replace(/([a-z]+|\d+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
     const imageOrDomainRegex = /\.(jpe?g|png|gif|com?|io|org|net|me)$/;
@@ -387,11 +387,11 @@ function sendComment(message, author, permlink, title, details) {
     const footer = '\n\n###### If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with `!help`.';
     steem.broadcast.comment(postingKey, author, permlink, 'checky', 're-' + author.replace(/\./g, '') + '-' + permlink, title, message + footer, JSON.stringify(metadata), function(err) {
         if(err) {
-            if(log_errors) console.error(`Broadcast error: ${ err.message } with ${ request_nodes[0] }`);
+            if(log_errors) console.error(`Broadcast error: ${ err.message } with ${ requestNodes[0] }`);
             // Putting the node where the error comes from at the end of the array
-            request_nodes.push(request_nodes.shift());
-            steem.api.setOptions({ url: request_nodes[0] });
-            if(log_errors) console.log(`Retrying with ${ request_nodes[0] }`);
+            requestNodes.push(requestNodes.shift());
+            steem.api.setOptions({ url: requestNodes[0] });
+            if(log_errors) console.log(`Retrying with ${ requestNodes[0] }`);
             sendComment(message, author, permlink, title, details);
         } else {
             // Making sure that the 20 seconds delay between comments is respected
@@ -412,11 +412,11 @@ function updateNodes() {
             if(err) return resolve(updateNodes());
             const nodes = JSON.parse(res.json_metadata).nodes.filter(node => !/^wss/.test(node));
             if(nodes.length > 0) {
-                request_nodes = nodes;
-                stream_nodes = nodes;
+                requestNodes = nodes;
+                streamNodes = nodes;
                 usernameChecker.updateNodes(nodes);
             }
-            steem.api.setOptions({ url: request_nodes[0] });
+            steem.api.setOptions({ url: requestNodes[0] });
             return resolve();
         });
     });
