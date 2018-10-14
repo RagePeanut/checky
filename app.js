@@ -172,7 +172,7 @@ async function processMentions(body, author, permlink, type, tags) {
     const knownUsernames = [];
     const alreadyEncountered = [];
     const details = {};
-    const mentionRegex = /(^|[^\w=/])@([a-z][a-z\d.-]{1,16}[a-z\d])(?![\w/(])/gimu;
+    const mentionRegex = /(^|[^\w=/])@([a-z][a-z\d.-]{1,16}[a-z\d])(?![\w/(]|\.[a-z])/gimu;
     // All variations of the author username
     const authorRegex = new RegExp(author.replace(/([a-z]+|\d+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
     const imageOrDomainRegex = /\.(jpe?g|png|gif|com?|io|org|net|me)$/;
