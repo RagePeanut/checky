@@ -2,25 +2,27 @@ const steem = require('steem');
 const steemStream = require('steem');
 const usernameChecker = require('./utils/username-checker');
 const { kebabCase, trim, uniqCompact } = require('./utils/helper');
-const { log_errors, request_nodes, stream_nodes, test_environment} = require('./config');
+const { log_errors, test_environment} = require('./config');
+let { request_nodes, stream_nodes } = require('./config');
 const { version } = require('./package');
 
 const postingKey = process.env.CHECKY_POSTING_KEY;
-
-steem.api.setOptions({ url: request_nodes[0] });
 
 const comments = [];
 // Checking every second if a comment has to be sent and sending it
 let commentsInterval = setInterval(prepareComment, 1000);
 
-stream();
+updateNodes().then(_ => {
+    stream();
+    setInterval(updateNodes, 3 * 60 * 60 * 1000);
+});
 
 /** 
  * Streams operations from the blockchain and calls processCreatedPost or processCommand when necessary
  */
 function stream() {
     steemStream.api.setOptions({ url: stream_nodes[0] });
-    new Promise((resolve, reject) => {
+    new Promise((_, reject) => {
         console.log('Stream started with', stream_nodes[0]);
         steemStream.api.streamOperations((err, operation) => {
             if(err) return reject(err);
@@ -186,7 +188,7 @@ async function processMentions(body, author, permlink, type, tags) {
             alreadyEncountered.push(mention);
             const escapedMention = matches[2].replace(/\./g, '\\.');
             const textSurroundingMentionRegex = new RegExp('(?:\\S+\\s+){0,15}\\S*@' + escapedMention + '(?:[^a-z\d]\\S*(?:\\s+\\S+){0,15}|$)', 'gi');
-            const mentionInQuoteRegex = new RegExp('^> *.*@' + escapedMention + '.*|<blockquote( +cite="[^"]+")?>((?!<blockquote)[\\s\\S])*@' + escapedMention + '((?!<blockquote)[\\s\\S])*<\\/blockquote>', 'i');
+            const mentionInQuoteRegex = new RegExp('^> *.*@' + escapedMention + '.*|<blockquote( +cite="[^"]+")?>((?!<blockquote)[\\s\\S])*@' + escapedMention + '((?!<blockquote)[\\s\\S])*<\\/blockquote>', 'im');
             const mentionInCodeRegex = new RegExp('```[\\s\\S]*@' + escapedMention + '[\\s\\S]*```|`[^`\\r\\n\\f\\v]*@' + escapedMention + '[^`\\r\\n\\f\\v]*`|<code>[\\s\\S]*@' + escapedMention + '[\\s\\S]*<\\/code>', 'i');
             const mentionInLinkedPostTitleRegex = new RegExp('\\[([^\\]]*@' + escapedMention + '[^\\]]*)]\\([^)]*\\/@([a-z][a-z\\d.-]{1,14}[a-z\\d])\\/([a-z0-9-]+)\\)|<a +href="[^"]*\\/@?([a-z][a-z\\d.-]{1,14}[a-z\\d])\\/([a-z0-9-]+)" *>((?:(?!<\\/a>).)*@' + escapedMention + '(?:(?!<\\/a>).)*)<\\/a>', 'i');
             const mentionInImageAltRegex = new RegExp('!\\[[^\\]]*@' + escapedMention + '[^\\]]*]\\([^)]*\\)|<img [^>]*alt="[^"]*@' + escapedMention + '[^"]*"[^>]*>', 'i');
@@ -397,5 +399,25 @@ function sendComment(message, author, permlink, title, details) {
                 commentsInterval = setInterval(prepareComment, 1000)
             }, 19000);
         }
+    });
+}
+
+/**
+ * Updates the nodes used by the bot
+ * @param {string[]} nodes The new nodes 
+ */
+function updateNodes() {
+    return new Promise(resolve => {
+        steem.api.getAccounts(['fullnodeupdate'], (err, [res]) => {
+            if(err) return resolve(updateNodes());
+            const nodes = JSON.parse(res.json_metadata).nodes.filter(node => !/^wss/.test(node));
+            if(nodes.length > 0) {
+                request_nodes = nodes;
+                stream_nodes = nodes;
+                usernameChecker.updateNodes(nodes);
+            }
+            steem.api.setOptions({ url: request_nodes[0] });
+            return resolve();
+        });
     });
 }

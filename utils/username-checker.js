@@ -1,6 +1,6 @@
 const fs = require('fs');
 const steem = require('steem');
-const { log_errors, request_nodes } = require('../config');
+let { log_errors, request_nodes } = require('../config');
 const { merge } = require('./helper');
 
 const unallowedUsernameRegex = /(^|\.)[\d.-]|[.-](\.|$)|-{2}|.{17}|(^|\.).{0,2}(\.|$)/;
@@ -326,14 +326,14 @@ function getExisting(usernames) {
  */
 function getDiscovered(usernames) {
     return new Promise(resolve => {
-        steem.api.lookupAccountNames(usernames, async (err, res) => {
+        steem.api.lookupAccountNames(usernames, (err, res) => {
             if(err) {
                 if(log_errors) console.error(`Request error (lookupAccountNames): ${ err.message } with ${ request_nodes[0] }`);
                 // Putting the node where the error comes from at the end of the array
                 request_nodes.push(request_nodes.shift());
                 steem.api.setOptions({ url: request_nodes[0] });
                 if(log_errors) console.log(`Retrying with ${ request_nodes[0] }`);
-                return resolve(await getDiscovered(usernames));
+                return resolve(getDiscovered(usernames));
             }
             const discovered = res.filter(user => user).map(user => user.name);
             addUsers(null, discovered);
@@ -375,6 +375,15 @@ function setMode(username, mode) {
 }
 
 /**
+ * Updates the nodes used for Steem requests
+ * @param {string[]} nodes The new nodes 
+ */
+function updateNodes(nodes) {
+    request_nodes = nodes;
+    steem.api.setOptions({ url: nodes[0] });
+}
+
+/**
  * Updates the ./data/users.json file with the content of the users object (recursively called every `interval` seconds)
  * @param {number} interval The interval between the end of a file updated and the beginning of the next file update
  */
@@ -395,5 +404,6 @@ module.exports = {
     getUser,
     removeIgnored,
     setDelay,
-    setMode
+    setMode,
+    updateNodes
 }
