@@ -11,18 +11,7 @@ steem.api.setOptions({ url: request_nodes[0] });
 
 const comments = [];
 // Checking every second if a comment has to be sent and sending it
-let commentsInterval = setInterval(() => {
-    if(comments[0]) {
-        if(test_environment) {
-            console.log(comments.shift());
-        } else {
-            // Making sure that no comment is sent while processing this one
-            clearInterval(commentsInterval);
-            const comment = comments.shift();
-            sendMessage(comment[0], comment[1], comment[2], comment[3], comment[4] || {});
-        }
-    }
-}, 1000);
+let commentsInterval = setInterval(prepareComment, 1000);
 
 stream();
 
@@ -121,6 +110,22 @@ function getContent(author, permlink) {
 }
 
 /**
+ * Prepares a comment and makes sure that no comment is being sent before this one
+ */
+function prepareComment() {
+    if(comments[0]) {
+        if(test_environment) {
+            console.log(comments.shift());
+        } else {
+            // Making sure that no comment is sent while processing this one
+            clearInterval(commentsInterval);
+            const comment = comments.shift();
+            sendComment(comment[0], comment[1], comment[2], comment[3], comment[4] || {});
+        }
+    }
+}
+
+/**
  * Calls processMentions after a certain delay set by the author
  * @param {string} author The author of the post
  * @param {string} permlink The permlink of the post
@@ -155,7 +160,7 @@ function processPost(author, permlink, mustBeNew) {
 }
 
 /**
- * Finds all the wrong mentions in the body of a post and calls sendMessage if it finds any
+ * Finds all the wrong mentions in the body of a post
  * @param {string} body The body of the post (used for social network checking)
  * @param {string} author The author of the post
  * @param {string} permlink The permlink of the post
@@ -365,7 +370,7 @@ async function processCommand(command, params, target, author, permlink, parent_
  * @param {string} title The title of the message to broadcast
  * @param {any} details The details about where the wrong mentions have been found
  */
-function sendMessage(message, author, permlink, title, details) {
+function sendComment(message, author, permlink, title, details) {
     if(title.length > 255) title = title.slice(0, 252) + '...';
     const metadata = {
         app: 'checky/' + version,
@@ -385,18 +390,11 @@ function sendMessage(message, author, permlink, title, details) {
             request_nodes.push(request_nodes.shift());
             steem.api.setOptions({ url: request_nodes[0] });
             if(log_errors) console.log(`Retrying with ${ request_nodes[0] }`);
-            sendMessage(message, author, permlink, title);
+            sendComment(message, author, permlink, title, details);
         } else {
             // Making sure that the 20 seconds delay between comments is respected
             setTimeout(() => {
-                commentsInterval = setInterval(() => {
-                    if(comments[0]) {
-                        // Making sure that no comment is sent while processing this one
-                        clearInterval(commentsInterval);
-                        const comment = comments.shift();
-                        sendMessage(comment[0], comment[1], comment[2], comment[3]);
-                    }
-                }, 1000);
+                commentsInterval = setInterval(prepareComment, 1000)
             }, 19000);
         }
     });
