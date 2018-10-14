@@ -90,6 +90,7 @@ function correct(username, author, otherMentions, tags) {
         } else if(await exists('the' + username)) return resolve('@<em></em><strong>the</strong>' + username);
         // Testing for tags written as mentions
         else if(tags.includes(username)) return resolve('#' + username);
+        else if(await isTag(author, username, tags)) return resolve('#' + username);
         // No suggestion
         else return resolve(null);
     });
@@ -171,6 +172,64 @@ function inserts(username, edits, characters, mustBeValid) {
             const insert = firstPart + characters[j] + lastPart;
             if(!mustBeValid || !unallowedUsernameRegex.test(insert)) edits.add(insert);
         }
+    }
+}
+
+/**
+ * Checks if a received word is a popular tag or has been used by the author as a tag
+ * @param {string} author The author of the post
+ * @param {string} word The word to check
+ * @param {string[]} tags The tags of the post
+ * @returns {Promise<boolean>} Whether or not the word actually is a tag 
+ */
+function isTag(author, word, tags) {
+    return new Promise(resolve => {
+        if(tags.includes(word)) return resolve(true);
+        resolve(isTrendingTag());
+    });
+
+    /**
+     * Checks if the word is in the 1000 first trending tags
+     * If not, returns whether or not it has been used by the author as a tag
+     * @returns {Promise<boolean>} Whether or not the word is a trending tag or has been used by the author as a tag
+     */
+    function isTrendingTag() {
+        return new Promise(resolve => {
+            steem.api.getTrendingTags('', 1000, (err, tags) => {
+                if(err) {
+                    if(log_errors) console.error(`Request error (getTrendingTags): ${ err.message } with ${ request_nodes[0] }`);
+                    // Putting the node where the error comes from at the end of the array
+                    request_nodes.push(request_nodes.shift());
+                    steem.api.setOptions({ url: request_nodes[0] });
+                    if(log_errors) console.log(`Retrying with ${ request_nodes[0] }`);
+                    return resolve(isTrendingTag());
+                }
+                if(tags.some(tag => tag.name === word)) return resolve(true);
+                resolve(isTagUsedByAuthor());
+            });
+        });
+    }
+
+    /**
+     * Checks if the word has been used by the author as a tag
+     * @return {Promise<boolean>} Whether or not the word has been used by the author as a tag
+     */
+    function isTagUsedByAuthor() {
+        return new Promise(resolve => {
+            steem.api.getTagsUsedByAuthor(author, (err, tags) => {
+                if(err) {
+                    if(log_errors) console.error(`Request error (getTagsUsedByAuthor): ${ err.message } with ${ request_nodes[0] }`);
+                    // Putting the node where the error comes from at the end of the array
+                    request_nodes.push(request_nodes.shift());
+                    steem.api.setOptions({ url: request_nodes[0] });
+                    if(log_errors) console.log(`Retrying with ${ request_nodes[0] }`);
+                    return resolve(isTagUsedByAuthor());
+                }
+                // Not sure how the array items are structured
+                if(tags.some(tag => tag === word || tag.name === word)) return resolve(true);
+                resolve(false);
+            });
+        });
     }
 }
 
