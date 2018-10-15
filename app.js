@@ -190,14 +190,14 @@ async function processMentions(body, author, permlink, type, tags) {
                 alreadyEncountered.push(mention);
                 const escapedMention = mention.replace(/\./g, '\\.');
                 const textSurroundingMentionRegex = new RegExp('(?:\\S+\\s+){0,15}\\S*@' + escapedMention + '(?:[^a-z\d]\\S*(?:\\s+\\S+){0,15}|$)', 'gi');
-                const mentionInQuoteRegex = new RegExp('^> *.*@' + escapedMention + '.*|<blockquote( +cite="[^"]+")?>((?!<blockquote)[\\s\\S])*@' + escapedMention + '((?!<blockquote)[\\s\\S])*<\\/blockquote>', 'im');
+                const mentionInQuoteRegex = new RegExp('^(> *| {4}).*@' + escapedMention + '.*|<blockquote( +cite="[^"]+")?>((?!<blockquote)[\\s\\S])*@' + escapedMention + '((?!<blockquote)[\\s\\S])*<\\/blockquote>', 'im');
                 const mentionInCodeRegex = new RegExp('```[\\s\\S]*@' + escapedMention + '[\\s\\S]*```|`[^`\\r\\n\\f\\v]*@' + escapedMention + '[^`\\r\\n\\f\\v]*`|<code>[\\s\\S]*@' + escapedMention + '[\\s\\S]*<\\/code>', 'i');
                 const mentionInLinkedPostTitleRegex = new RegExp('\\[([^\\]]*@' + escapedMention + '[^\\]]*)]\\([^)]*\\/@([a-z][a-z\\d.-]{1,14}[a-z\\d])\\/([a-z0-9-]+)\\)|<a +href="[^"]*\\/@?([a-z][a-z\\d.-]{1,14}[a-z\\d])\\/([a-z0-9-]+)" *>((?:(?!<\\/a>).)*@' + escapedMention + '(?:(?!<\\/a>).)*)<\\/a>', 'i');
                 const mentionInImageAltRegex = new RegExp('!\\[[^\\]]*@' + escapedMention + '[^\\]]*]\\([^)]*\\)|<img [^>]*alt="[^"]*@' + escapedMention + '[^"]*"[^>]*>', 'i');
                 const socialNetworksRegex = /(insta|tele)gram|tw(it?ter|eet)|facebook|golos|whaleshares?|discord|medium|minds|brunch|unsplash|텔레그램|推特|[^a-z](ig|rt|fb|ws|eos)[^a-z]|t.(me|co)\//i;
                 // True if not ignored, not part of a word/url, not a variation of the author username, not in a code block, not in a quote and not ending with an image/domain extension
                 if(!ignoredMentions.includes(mention) && !tags.some(tag => tag === 'whaleshares') && mention.match(authorRegex).every(match => !match) && !mentionInCodeRegex.test(body) && !mentionInQuoteRegex.test(body) && !mentionInImageAltRegex.test(body) && !imageOrDomainRegex.test(mention)) {
-                    // Adding the username to the mentions array only if it doesn't contain a social network reference in the 40 words surrounding it
+                    // Adding the username to the mentions array only if it doesn't contain a social network reference in the 30 words surrounding it
                     const surrounding = body.match(textSurroundingMentionRegex);
                     if(surrounding && surrounding.every(text => !socialNetworksRegex.test(text))) {
                         // Adding the username to the mentions array only if it isn't part of the title of a post linked in the checked post
