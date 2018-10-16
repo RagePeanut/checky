@@ -2,7 +2,7 @@ const steem = require('steem');
 const steemStream = require('steem');
 const usernameChecker = require('./utils/username-checker');
 const { kebabCase, trim, uniqCompact } = require('./utils/helper');
-const { log_errors, test_environment} = require('./config');
+const { fail_safe_node, log_errors, test_environment} = require('./config');
 const { version } = require('./package');
 
 const postingKey = process.env.CHECKY_POSTING_KEY;
@@ -11,7 +11,7 @@ const comments = [];
 // Checking every second if a comment has to be sent and sending it
 let commentsInterval = setInterval(prepareComment, 1000);
 
-let requestNodes, streamNodes;
+let requestNodes = [fail_safe_node], streamNodes = [fail_safe_node];
 updateNodes().then(_ => {
     stream();
     setInterval(updateNodes, 3 * 60 * 60 * 1000);
@@ -328,7 +328,7 @@ async function processCommand(command, params, target, author, permlink, parent_
             case 'delay':
                 if(params) {
                     const delay = parseInt(params);
-                    if(usernameChecker.setDelay(Math.abs(delay))) {
+                    if(usernameChecker.setDelay(target, Math.abs(delay))) {
                         if(targetData.delay > 0 ) comments.push([`The delay has been set to ${ targetData.delay } minute${ targetData.delay > 1 ? 's' : '' }. @checky will now wait ${ targetData.delay } minute${ targetData.delay > 1 ? 's' : '' } before checking your mentions.`, author, permlink, `Delay set to ${ targetData.delay } minute${ targetData.delay > 1 ? 's' : '' }`]);
                         else comments.push([`The delay has been set to ${ targetData.delay } minutes. @checky will instantly check your mentions when you post.`, author, permlink, `Delay set to ${ targetData.delay } minute${ targetData.delay > 1 ? 's' : '' }`])
                     } else comments.push(['You didn\'t correctly specify the delay. Please try again by using a number to represent the delay.', author, permlink, `Delay wrongly specified`]);
@@ -411,9 +411,9 @@ function sendComment(message, author, permlink, title, details) {
  */
 function updateNodes() {
     return new Promise(resolve => {
-        steem.api.getAccounts(['fullnodeupdate'], (err, [res]) => {
+        steem.api.getAccounts(['fullnodeupdate'], (err, res) => {
             if(err) return resolve(updateNodes());
-            const nodes = JSON.parse(res.json_metadata).nodes.filter(node => !/^wss/.test(node));
+            const nodes = JSON.parse(res[0].json_metadata).nodes.filter(node => !/^wss/.test(node));
             if(nodes.length > 0) {
                 requestNodes = nodes;
                 streamNodes = nodes;

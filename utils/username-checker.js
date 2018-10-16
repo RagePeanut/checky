@@ -1,9 +1,9 @@
 const fs = require('fs');
 const steno = require('steno');
 const steem = require('steem');
-const { log_errors } = require('../config');
+const { fail_safe_node, log_errors } = require('../config');
 const { merge } = require('./helper');
-let requestNodes;
+let requestNodes = [fail_safe_node];
 
 const unallowedUsernameRegex = /(^|\.)[\d.-]|[.-](\.|$)|-{2}|.{17}|(^|\.).{0,2}(\.|$)/;
 

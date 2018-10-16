@@ -1,4 +1,5 @@
 {
     "log_errors": false,
-    "test_environment": true
+    "fail_safe_node": "https://api.steemit.com",
+    "test_environment": false
 }
