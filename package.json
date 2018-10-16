@@ -1,6 +1,6 @@
 {
   "name": "checky",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A bot that checks if mentioned Steem users exist.",
   "main": "app.js",
   "scripts": {
@@ -19,7 +19,8 @@
   "license": "MIT",
   "dependencies": {
     "lodash.kebabcase": "^4.1.1",
-    "steem": "^0.7.2"
+    "steem": "^0.7.2",
+    "steno": "^0.4.4"
   },
   "devDependencies": {},
   "repository": {

@@ -1,4 +1,5 @@
 const fs = require('fs');
+const steno = require('steno');
 const steem = require('steem');
 const { log_errors } = require('../config');
 const { merge } = require('./helper');
@@ -387,10 +388,10 @@ function updateNodes(nodes) {
  * @param {number} interval The interval between the end of a file updated and the beginning of the next file update
  */
 function updateUsersFile(interval) {
-    fs.writeFile('data/users.json', JSON.stringify(users), err => {
+    steno.writeFile('data/users.json', JSON.stringify(users), err => {
         if(err && log_errors) console.error(err.message);
         setTimeout(updateUsersFile, interval * 1000, interval);
-    })
+    });
 }
 
 module.exports = {

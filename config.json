@@ -1,4 +1,4 @@
 {
     "log_errors": false,
-    "test_environment": false
+    "test_environment": true
 }
