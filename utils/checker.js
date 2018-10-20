@@ -1,20 +1,27 @@
 const fs = require('fs');
 const steno = require('steno');
-const steem = require('steem');
-const { fail_safe_node, log_errors } = require('../config');
+const { log_errors } = require('../config');
 const { merge } = require('./helper');
-let requestNodes = [fail_safe_node];
 
 const unallowedUsernameRegex = /(^|\.)[\d.-]|[.-](\.|$)|-{2}|.{17}|(^|\.).{0,2}(\.|$)/;
 
-// Creating a users object and updating it with the content of ./data/users.json if the file exists 
+// Creating a users object
 let users = {};
-if(fs.existsSync('data')) {
-    if(fs.existsSync('data/users.json')) users = require('../data/users');
-} else fs.mkdirSync('data');
+let steemer;
 
-// Updating the ./data/users.json file with the content of the users object every 5 seconds
-updateUsersFile(5);
+/**
+ * Initializes the username checker's variables
+ * @param {any} _steemer The instance of steemer used by the bot
+ */
+function init(_steemer) {
+    // Updating `users` with the content of ./data/users.json if the file exists 
+    if(fs.existsSync('data')) {
+        if(fs.existsSync('data/users.json')) users = require('../data/users');
+    } else fs.mkdirSync('data');
+    // Updating the ./data/users.json file with the content of the users object every 5 seconds
+    updateUsersFile(5);
+    steemer = _steemer;
+}
 
 /**
  * Adds usernames to an author's ignored mentions
@@ -60,40 +67,38 @@ function addUsers(origin, ...usernames) {
  * @param {string[]} tags The tags of the post
  * @returns {Promise<string>} A correct username close to the wrong one, returns null if no username is found
  */
-function correct(username, author, otherMentions, tags) {
-    return new Promise(async resolve => {
-        // Adding `author` to `otherMentions` to avoid repeating the same testing code twice
-        if(!otherMentions.includes(author)) otherMentions.unshift(author);
-        // Testing for username variations
-        const usernameNoPunct = username.replace(/[\d.-]/g, '');
-        let suggestion = otherMentions.find(mention => {
-            const mentionNoPunct = mention.replace(/[\d.-]/g, '');
-            return usernameNoPunct === mentionNoPunct || 'the' + usernameNoPunct === mentionNoPunct;
-        });
-        if(suggestion) return resolve('@<em></em>' + highlightDifferences(username, suggestion));
-        // Testing for usernames that are one edit away from the wrong username
-        let edits = new Set();
-        edits1(username, edits, false);
-        let suggestions = await getExisting(edits);
-        if(suggestions.length === 0) {
-            // Testing for usernames that are two edits away from the wrong username
-            edits = edits2(edits);
-            suggestions = await getExisting(edits);
-        }
-        if(suggestions.length > 0) {
-            if(suggestions.length === 1) return resolve('@<em></em>' + highlightDifferences(username, suggestions[0]));
-            // Trying to find the better suggestion based on the mentions made by the author in the post and, if needed, in his previous posts
-            suggestion = suggestions.find(mention => otherMentions.includes(mention) || users[author].mentioned.includes(mention));
-            if(suggestion) return resolve('@<em></em>' + highlightDifferences(username, suggestion));
-            // Suggesting the most mentioned username overall
-            return resolve('@<em></em>' + highlightDifferences(username, suggestions.sort((a, b) => users[b].occ - users[a].occ)[0]));
-        } else if(await exists('the' + username)) return resolve('@<em></em><strong>the</strong>' + username);
-        // Testing for tags written as mentions
-        else if(tags.includes(username)) return resolve('#' + username);
-        else if(await isTag(author, username, tags)) return resolve('#' + username);
-        // No suggestion
-        else return resolve(null);
+async function correct(username, author, otherMentions, tags) {
+    // Adding `author` to `otherMentions` to avoid repeating the same testing code twice
+    if(!otherMentions.includes(author)) otherMentions.unshift(author);
+    // Testing for username variations
+    const usernameNoPunct = username.replace(/[\d.-]/g, '');
+    let suggestion = otherMentions.find(mention => {
+        const mentionNoPunct = mention.replace(/[\d.-]/g, '');
+        return usernameNoPunct === mentionNoPunct || 'the' + usernameNoPunct === mentionNoPunct;
     });
+    if(suggestion) return '@<em></em>' + highlightDifferences(username, suggestion);
+    // Testing for usernames that are one edit away from the wrong username
+    let edits = new Set();
+    edits1(username, edits, false);
+    let suggestions = await getExisting(edits);
+    if(suggestions.length === 0) {
+        // Testing for usernames that are two edits away from the wrong username
+        edits = edits2(edits);
+        suggestions = await getExisting(edits);
+    }
+    if(suggestions.length > 0) {
+        if(suggestions.length === 1) return '@<em></em>' + highlightDifferences(username, suggestions[0]);
+        // Trying to find the better suggestion based on the mentions made by the author in the post and, if needed, in his previous posts
+        suggestion = suggestions.find(mention => otherMentions.includes(mention) || users[author].mentioned.includes(mention));
+        if(suggestion) return '@<em></em>' + highlightDifferences(username, suggestion);
+        // Suggesting the most mentioned username overall
+        return '@<em></em>' + highlightDifferences(username, suggestions.sort((a, b) => users[b].occ - users[a].occ)[0]);
+    } else if(await exists('the' + username)) return '@<em></em><strong>the</strong>' + username;
+    // Testing for tags written as mentions
+    else if(tags.includes(username)) return '#' + username;
+    else if(await isTag(author, username, tags)) return '#' + username;
+    // No suggestion
+    else return null;
 }
 
 /**
@@ -182,55 +187,13 @@ function inserts(username, edits, characters, mustBeValid) {
  * @param {string[]} tags The tags of the post
  * @returns {Promise<boolean>} Whether or not the word actually is a tag 
  */
-function isTag(author, word, tags) {
-    return new Promise(resolve => {
-        if(tags.includes(word)) return resolve(true);
-        resolve(isTrendingTag());
-    });
-
-    /**
-     * Checks if the word is in the 1000 first trending tags
-     * If not, returns whether or not it has been used by the author as a tag
-     * @returns {Promise<boolean>} Whether or not the word is a trending tag or has been used by the author as a tag
-     */
-    function isTrendingTag() {
-        return new Promise(resolve => {
-            steem.api.getTrendingTags('', 1000, (err, tags) => {
-                if(err) {
-                    if(log_errors) console.error(`Request error (getTrendingTags): ${ err.message } with ${ requestNodes[0] }`);
-                    // Putting the node where the error comes from at the end of the array
-                    requestNodes.push(requestNodes.shift());
-                    steem.api.setOptions({ url: requestNodes[0] });
-                    if(log_errors) console.log(`Retrying with ${ requestNodes[0] }`);
-                    return resolve(isTrendingTag());
-                }
-                if(tags.some(tag => tag.name === word)) return resolve(true);
-                resolve(isTagUsedByAuthor());
-            });
-        });
-    }
-
-    /**
-     * Checks if the word has been used by the author as a tag
-     * @return {Promise<boolean>} Whether or not the word has been used by the author as a tag
-     */
-    function isTagUsedByAuthor() {
-        return new Promise(resolve => {
-            steem.api.getTagsUsedByAuthor(author, (err, tags) => {
-                if(err) {
-                    if(log_errors) console.error(`Request error (getTagsUsedByAuthor): ${ err.message } with ${ requestNodes[0] }`);
-                    // Putting the node where the error comes from at the end of the array
-                    requestNodes.push(requestNodes.shift());
-                    steem.api.setOptions({ url: requestNodes[0] });
-                    if(log_errors) console.log(`Retrying with ${ requestNodes[0] }`);
-                    return resolve(isTagUsedByAuthor());
-                }
-                // Not sure how the array items are structured
-                if(tags.some(tag => tag === word || tag.name === word)) return resolve(true);
-                resolve(false);
-            });
-        });
-    }
+async function isTag(author, word, tags) {
+    if(tags.includes(word)) return true;
+    tags = await steemer.getTrendingTags();
+    if(tags.some(tag => tag === word)) return true;
+    tags = await steemer.getTagsByAuthor(author);
+    if(tags.some(tag => tag === word)) return true;
+    return false;
 }
 
 /**
@@ -294,52 +257,22 @@ async function exists(username) {
  * @param {Set<string>} usernames The usernames
  * @returns {Promise<string[]>} The usernames that exist on the Steem blockchain
  */
-function getExisting(usernames) {
-    let existing = [];
+async function getExisting(usernames) {
+    const existing = [];
     const toCheck = [];
-    return new Promise(resolve => {
-        usernames.forEach(username => {
-            if(users.hasOwnProperty(username)) existing.push(username);
-            else toCheck.push(username);
-        });
-        if(toCheck.length === 0) return resolve([...usernames]);
-        const promises = [];
-        for(let i = 0; i < toCheck.length; i += 10000) {
-            promises.push(getDiscovered(toCheck.slice(i, i + 10000)))
+    usernames.forEach(username => {
+        if(users.hasOwnProperty(username)) existing.push(username);
+        else toCheck.push(username);
+    });
+    if(toCheck.length === 0) return [...usernames];
+    for(let i = 0; i < toCheck.length; i += 10000) {
+        const discovered = await steemer.lookupAccountNames(toCheck.slice(i, i + 10000));
+        for(let j = 0; j < discovered.length; j++) {
+            existing.push(discovered[j]);
         }
-        Promise.all(promises)
-               .then(discovered => {
-                   for(let i = 0; i < discovered.length; i++) {
-                       for(let j = 0; j < discovered[i].length; j++) {
-                           existing.push(discovered[i][j]);
-                       }
-                   }
-                   return resolve(existing);
-               });
-    });
-}
-
-/**
- * Returns the received usernames that exist on the Steem blockchain
- * @param {string[]} usernames An array of usernames that may exist on the blockchain
- * @returns {Promise<string[]>} The usernames from the received list that exist on the blockchain
- */
-function getDiscovered(usernames) {
-    return new Promise(resolve => {
-        steem.api.lookupAccountNames(usernames, (err, res) => {
-            if(err) {
-                if(log_errors) console.error(`Request error (lookupAccountNames): ${ err.message } with ${ requestNodes[0] }`);
-                // Putting the node where the error comes from at the end of the array
-                requestNodes.push(requestNodes.shift());
-                steem.api.setOptions({ url: requestNodes[0] });
-                if(log_errors) console.log(`Retrying with ${ requestNodes[0] }`);
-                return resolve(getDiscovered(usernames));
-            }
-            const discovered = res.filter(user => user).map(user => user.name);
-            addUsers(null, discovered);
-            return resolve(discovered);
-        });
-    });
+        addUsers(null, discovered);
+    }
+    return existing;
 }
 
 /**
@@ -375,15 +308,6 @@ function setMode(username, mode) {
 }
 
 /**
- * Updates the nodes used for Steem requests
- * @param {string[]} nodes The new nodes 
- */
-function updateNodes(nodes) {
-    requestNodes = nodes;
-    steem.api.setOptions({ url: nodes[0] });
-}
-
-/**
  * Updates the ./data/users.json file with the content of the users object (recursively called every `interval` seconds)
  * @param {number} interval The interval between the end of a file updated and the beginning of the next file update
  */
@@ -402,8 +326,8 @@ module.exports = {
     exists,
     getExisting,
     getUser,
+    init,
     removeIgnored,
     setDelay,
-    setMode,
-    updateNodes
+    setMode
 }

@@ -1,30 +1,33 @@
 const steem = require('steem');
-const steemStream = require('steem');
-const usernameChecker = require('./utils/username-checker');
+const steemer = require('./utils/steemer');
+const checker = require('./utils/checker');
+checker.init(steemer);
 const { kebabCase, trim, uniqCompact } = require('./utils/helper');
 const { fail_safe_node, log_errors, test_environment} = require('./config');
 const { version } = require('./package');
-
-const postingKey = process.env.CHECKY_POSTING_KEY;
 
 const comments = [];
 // Checking every second if a comment has to be sent and sending it
 let commentsInterval = setInterval(prepareComment, 1000);
 
-let requestNodes = [fail_safe_node], streamNodes = [fail_safe_node];
-updateNodes().then(_ => {
-    stream();
-    setInterval(updateNodes, 3 * 60 * 60 * 1000);
+let alreadyStreaming = false;
+let nodes = [fail_safe_node];
+steemer.updateNodes(newNodes => {
+    nodes = newNodes;
+    if(!alreadyStreaming) {
+        alreadyStreaming = true;
+        stream();
+    }
 });
 
 /** 
  * Streams operations from the blockchain and calls processCreatedPost or processCommand when necessary
  */
 function stream() {
-    steemStream.api.setOptions({ url: streamNodes[0] });
+    steem.api.setOptions({ url: nodes[0] });
     new Promise((_, reject) => {
-        console.log('Stream started with', streamNodes[0]);
-        steemStream.api.streamOperations((err, operation) => {
+        console.log('Stream started with', nodes[0]);
+        steem.api.streamOperations((err, operation) => {
             if(err) return reject(err);
             if(operation) {
                 switch(operation[0]) {
@@ -33,9 +36,9 @@ function stream() {
                         const parentAuthor = operation[1].parent_author;
                         const permlink = operation[1].permlink;
     
-                        usernameChecker.addUsers(author, parentAuthor);
+                        checker.addUsers(author, parentAuthor);
 
-                        const mode = usernameChecker.getUser(author).mode;
+                        const mode = checker.getUser(author).mode;
     
                         if(parentAuthor === 'checky') {
                             // Parsing the command from the comment
@@ -53,62 +56,40 @@ function stream() {
                         break;
                     case 'vote':
                         const voter = operation[1].voter;
-                        usernameChecker.addUsers(voter, operation[1].author);
+                        checker.addUsers(voter, operation[1].author);
                         // Setting the user mode to off if he has flagged the bot's comment
-                        if(operation[1].author === 'checky' && operation[1].weight < 0) usernameChecker.setMode(voter, 'off');
+                        if(operation[1].author === 'checky' && operation[1].weight < 0) checker.setMode(voter, 'off');
                         break;
                     case 'delegate_vesting_shares':
-                        usernameChecker.addUsers(operation[1].delegator, operation[1].delegatee);
+                        checker.addUsers(operation[1].delegator, operation[1].delegatee);
                         break;
                     case 'fill_transfer_from_savings':
                     case 'transfer':
                     case 'transfer_to_vesting':
                     case 'transfer_to_savings':
                     case 'transfer_from_savings':
-                        usernameChecker.addUsers(operation[1].from, operation[1].to);
+                        checker.addUsers(operation[1].from, operation[1].to);
                         break;
                     case 'fill_vesting_withdraw':
-                        usernameChecker.addUsers(operation[1].from_account, operation[1].to_account);
+                        checker.addUsers(operation[1].from_account, operation[1].to_account);
                         break;
                     case 'account_create':
                     case 'account_create_with_delegation':
-                        usernameChecker.addUsers(operation[1].creator, operation[1].new_account_name);
+                        checker.addUsers(operation[1].creator, operation[1].new_account_name);
                         break;
                     case 'comment_options':
                     case 'delete_comment':
-                        usernameChecker.addUsers(operation[1].author);
+                        checker.addUsers(operation[1].author);
                         break;
                 }
             }
         });
     }).catch(error => {
-        if(log_errors) console.error(`Stream error: ${ error.message } with ${ streamNodes[0] }`);
+        if(log_errors) console.error(`Stream error: ${ error.message } with ${ nodes[0] }`);
         // Putting the node where the error comes from at the end of the array
-        streamNodes.push(streamNodes.shift());
+        nodes.push(nodes.shift());
         stream();
     });
-}
-
-/**
- * Gets the content of a post
- * @param {string} author The author of the post
- * @param {string} permlink The permlink of the post
- * @return {Promise<any>} The content of the post
- */
-function getContent(author, permlink) {
-    return new Promise(resolve => {
-        steem.api.getContent(author, permlink, (err, content) => {
-            if(err) {
-                if(log_errors) console.error(`Request error (getContent): ${ err.message } with ${ requestNodes[0] }`);
-                // Putting the node where the error comes from at the end of the array
-                requestNodes.push(requestNodes.shift());
-                steem.api.setOptions({ url: requestNodes[0] });
-                if(log_errors) console.log(`Retrying with ${ requestNodes[0] }`);
-                return resolve(getContent(author, permlink));
-            }
-            resolve(content);
-        });
-    })
 }
 
 /**
@@ -134,10 +115,10 @@ function prepareComment() {
  * @param {boolean} mustBeNew Post must be new (true) or can have been updated (false)
  */
 function processPost(author, permlink, mustBeNew) {
-    getContent(author, permlink)
+    steemer.getContent(author, permlink)
         .then(content => {
             if(mustBeNew && content.last_update === content.created) {
-                const delay = usernameChecker.getUser(author).delay;
+                const delay = checker.getUser(author).delay;
                 if(delay > 0) {
                     setTimeout(() => { 
                         processPost(author, permlink, false);
@@ -178,7 +159,7 @@ async function processMentions(body, author, permlink, type, tags) {
     // All variations of the author username
     const authorRegex = new RegExp(author.replace(/([a-z]+|\d+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
     const imageOrDomainRegex = /\.(jpe?g|png|gif|com?|io|org|net|me)$/;
-    const ignoredMentions = usernameChecker.getUser(author).ignored;
+    const ignoredMentions = checker.getUser(author).ignored;
     let matches = [];
     while(matches = mentionRegex.exec(body)) {
         // Checking if an illegal character comes just after the mention
@@ -205,7 +186,7 @@ async function processMentions(body, author, permlink, type, tags) {
                         if(match) {
                             // Matches are mapped as follows: 1-6 = title    2-4 = author    3-5 = permlink
                             if(kebabCase(match[1] || match[6]) === kebabCase(match[3] || match[5])) continue;
-                            const linkedPost = await getContent(match[2] || match[4], match[3] || match[5]);
+                            const linkedPost = await steemer.getContent(match[2] || match[4], match[3] || match[5]);
                             if(linkedPost && kebabCase(match[1] || match[6]) === kebabCase(linkedPost.title)) continue;
                         }
                         details[mention] = (details[mention] || []).concat(
@@ -222,7 +203,7 @@ async function processMentions(body, author, permlink, type, tags) {
     }
     if(mentions.length > 0) {
         // Removing existing usernames
-        const existingUsernames = await usernameChecker.getExisting(mentions);
+        const existingUsernames = await checker.getExisting(mentions);
         mentions = mentions.filter(mention => {
             if(existingUsernames.includes(mention)) {
                 if(mention !== author) knownUsernames.push(mention);
@@ -234,10 +215,10 @@ async function processMentions(body, author, permlink, type, tags) {
         // At this point, the mentions array can only contain wrong mentions, building and sending a message if the array is not empty
         if(mentions.length > 0) {
             let message = `Hi @${ author }, I'm @checky ! While checking the mentions made in this ${ type } I noticed that @${ mentions[0] }`;
-            const promises = mentions.map(mention => usernameChecker.correct(mention, author, knownUsernames, tags));
+            const promises = mentions.map(mention => checker.correct(mention, author, knownUsernames, tags));
             Promise.all(promises)
                 .then(suggestions => {
-                    usernameChecker.addMentioned(author, knownUsernames);
+                    checker.addMentioned(author, knownUsernames);
                     if(mentions.length > 1) {
                         suggestions = uniqCompact(suggestions);
                         let lastSentence = 'Maybe you made some typos';
@@ -258,7 +239,7 @@ async function processMentions(body, author, permlink, type, tags) {
                     comments.push([message, author, permlink, 'Possible wrong mentions found', details]);
                 });
         }
-    } else usernameChecker.addMentioned(author, knownUsernames);
+    } else checker.addMentioned(author, knownUsernames);
 }
 
 /**
@@ -271,21 +252,21 @@ async function processMentions(body, author, permlink, type, tags) {
  * @param {string} parent_permlink The permlink of @checky's comment
  */
 async function processCommand(command, params, target, author, permlink, parent_permlink) {
-    if(!(await usernameChecker.exists(target))) comments.push(['The target user doesn\'t exist on the Steem blockchain. Maybe you made a typo ?', author, permlink, 'Possible wrong target username']);
+    if(!(await checker.exists(target))) comments.push(['The target user doesn\'t exist on the Steem blockchain. Maybe you made a typo ?', author, permlink, 'Possible wrong target username']);
     else {
-        const targetData = usernameChecker.getUser(target);
+        const targetData = checker.getUser(target);
         switch(command) {
             case 'ignore':
                 if(params) {
                     const mentions = params.split(/[\s,]+/).filter(mention => mention !== '').map(mention => mention.replace('@', '').toLowerCase());
-                    usernameChecker.addIgnored(target, mentions);
+                    checker.addIgnored(target, mentions);
                     comments.push([`The following mentions will now be ignored when made by you: ${ mentions.join(', ') }.\nIf for any reason you want to make @checky stop ignoring them, reply to any of my posts with \`!unignore username1 username2 ...\`.`, author, permlink, `Added some ignored mentions for @${ target }`]);
                 } else comments.push(['You didn\'t specify any username to ignore. Please try again by using the format `!ignore username1 username2`.', author, permlink, 'No username specified']);
                 break;
             case 'unignore':
                 if(params) {
                     const mentions = params.split(/[\s,]+/).filter(mention => mention !== '').map(mention => mention.replace('@', '').toLowerCase());
-                    usernameChecker.removeIgnored(target, mentions);
+                    checker.removeIgnored(target, mentions);
                     comments.push([`The following mentions will now be checked by @checky when made by you: ${ mentions.join(', ') }.\nIf for any reason you want to make @checky start ignoring them again, reply to any of my posts with \`!ignore username1 username2 ...\`.`, author, permlink, `Removed some ignored mentions for @${ target }`]);
                 } else comments.push(['You didn\'t specify any username to unignore. Please try again by using the format `!unignore username1 username2`.', author, permlink, 'No username specified']);
                 break;
@@ -302,16 +283,16 @@ async function processCommand(command, params, target, author, permlink, parent_
                         case 'on':
                         case 'regular':
                         case 'normal':
-                            usernameChecker.setMode(target, 'regular');
+                            checker.setMode(target, 'regular');
                             comments.push(['Your account has been set to regular. You will now only get your mentions checked for posts you make.', author, permlink, 'Account set to regular']);
                             break;
                         case 'advanced':
                         case 'plus':
-                            usernameChecker.setMode(target, 'advanced');
+                            checker.setMode(target, 'advanced');
                             comments.push(['Your account has been set to advanced. You will now get your mentions checked for posts and comments you make.', author, permlink, 'Account set to advanced']);
                             break;
                         case 'off':
-                            usernameChecker.setMode(target, 'off');
+                            checker.setMode(target, 'off');
                             comments.push(['Your account has been set to off. None of your mentions will now be checked whatsoever.', author, permlink, 'Account set to off']);
                             break;
                         default:
@@ -328,14 +309,14 @@ async function processCommand(command, params, target, author, permlink, parent_
             case 'delay':
                 if(params) {
                     const delay = parseInt(params);
-                    if(usernameChecker.setDelay(target, Math.abs(delay))) {
+                    if(checker.setDelay(target, Math.abs(delay))) {
                         if(targetData.delay > 0 ) comments.push([`The delay has been set to ${ targetData.delay } minute${ targetData.delay > 1 ? 's' : '' }. @checky will now wait ${ targetData.delay } minute${ targetData.delay > 1 ? 's' : '' } before checking your mentions.`, author, permlink, `Delay set to ${ targetData.delay } minute${ targetData.delay > 1 ? 's' : '' }`]);
                         else comments.push([`The delay has been set to ${ targetData.delay } minutes. @checky will instantly check your mentions when you post.`, author, permlink, `Delay set to ${ targetData.delay } minute${ targetData.delay > 1 ? 's' : '' }`])
                     } else comments.push(['You didn\'t correctly specify the delay. Please try again by using a number to represent the delay.', author, permlink, `Delay wrongly specified`]);
                 } else comments.push([`You didn't specify the delay. Please try again by using \`!${ command } minutes`, author, permlink, 'No delay specified']);
                 break;
             case 'where':
-                const content = await getContent('checky', parent_permlink);
+                const content = await steemer.getContent('checky', parent_permlink);
                 let details;
                 try {
                     details = JSON.parse(content.json_metadata).details;
@@ -370,9 +351,9 @@ async function processCommand(command, params, target, author, permlink, parent_
 /**
  * Broadcasts a comment on a post containing wrong mentions
  * @param {string} message The message to broadcast
- * @param {string} author The author of the post
- * @param {string} permlink The permlink of the post
- * @param {string} title The title of the message to broadcast
+ * @param {string} author The author of the post to reply to
+ * @param {string} permlink The permlink of the post to reply to
+ * @param {string} title The title of the comment to broadcast
  * @param {any} details The details about where the wrong mentions have been found
  */
 function sendComment(message, author, permlink, title, details) {
@@ -388,39 +369,11 @@ function sendComment(message, author, permlink, title, details) {
         ]
     }
     const footer = '\n\n###### If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with `!help`.';
-    steem.broadcast.comment(postingKey, author, permlink, 'checky', 're-' + author.replace(/\./g, '') + '-' + permlink, title, message + footer, JSON.stringify(metadata), function(err) {
-        if(err) {
-            if(log_errors) console.error(`Broadcast error: ${ err.message } with ${ requestNodes[0] }`);
-            // Putting the node where the error comes from at the end of the array
-            requestNodes.push(requestNodes.shift());
-            steem.api.setOptions({ url: requestNodes[0] });
-            if(log_errors) console.log(`Retrying with ${ requestNodes[0] }`);
-            sendComment(message, author, permlink, title, details);
-        } else {
+    steemer.broadcastComment(author, permlink, 'checky', 're-' + author.replace(/\./g, '') + '-' + permlink, title, message + footer, JSON.stringify(metadata))
+        .then(() => {
             // Making sure that the 20 seconds delay between comments is respected
             setTimeout(() => {
                 commentsInterval = setInterval(prepareComment, 1000)
             }, 19000);
-        }
-    });
-}
-
-/**
- * Updates the nodes used by the bot
- * @param {string[]} nodes The new nodes 
- */
-function updateNodes() {
-    return new Promise(resolve => {
-        steem.api.getAccounts(['fullnodeupdate'], (err, res) => {
-            if(err) return resolve(updateNodes());
-            const nodes = JSON.parse(res[0].json_metadata).nodes.filter(node => !/^wss/.test(node));
-            if(nodes.length > 0) {
-                requestNodes = nodes;
-                streamNodes = nodes;
-                usernameChecker.updateNodes(nodes);
-            }
-            steem.api.setOptions({ url: requestNodes[0] });
-            return resolve();
         });
-    });
 }
