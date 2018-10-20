@@ -10,7 +10,7 @@ let users = {};
 let steemer;
 
 /**
- * Initializes the username checker's variables
+ * Initializes the username checker
  * @param {any} _steemer The instance of steemer used by the bot
  */
 function init(_steemer) {

@@ -2,6 +2,8 @@ const steem = require('steem');
 const steemer = require('./utils/steemer');
 const checker = require('./utils/checker');
 checker.init(steemer);
+const upvoter = require('./utils/upvoter');
+upvoter.init(steemer);
 const { kebabCase, trim, uniqCompact } = require('./utils/helper');
 const { fail_safe_node, log_errors, test_environment} = require('./config');
 const { version } = require('./package');
