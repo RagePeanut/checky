@@ -8,6 +8,7 @@ let steemer;
  */
 function init(_steemer) {
     steemer = _steemer;
+    setInterval(upvoteRandomCandidate, (24 / 9) * 60 * 60 * 1000);
 }
 
 /**
@@ -17,6 +18,15 @@ function init(_steemer) {
  */
 function addCandidate(author, permlink) {
     candidates.push({author, permlink});
+}
+
+/**
+ * Upvotes a random candidate from the upvote `candidates`
+ */
+function upvoteRandomCandidate() {
+    const candidate = candidates[Math.floor(Math.random() * candidates.length)];
+    candidates = [];
+    steemer.broadcastUpvote(candidate.author, candidate.permlink);
 }
 
 module.exports = {
