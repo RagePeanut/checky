@@ -97,13 +97,14 @@ function stream() {
 /**
  * Builds a message with suggested corrections based on the wrong mentions found in a post
  * @param {string[]} wrongMentions The wrong mentions found in the post
+ * @param {string[]} correctMentions The correct mentions found in the post
  * @param {string} author The author of the post
  * @param {string} type The type of the post (post or comment)
  * @param {string[]} tags The tags of the post
  */
-async function buildMessage(wrongMentions, author, type, tags) {
+async function buildMessage(wrongMentions, correctMentions, author, type, tags) {
     let message = `Hi @${ author }, I'm @checky ! While checking the mentions made in this ${ type } I noticed that @${ wrongMentions[0] }`;
-    const promises = wrongMentions.map(mention => checker.correct(mention, author, knownUsernames, tags));
+    const promises = wrongMentions.map(mention => checker.correct(mention, author, correctMentions, tags));
     let suggestions = await Promise.all(promises);
     if(wrongMentions.length > 1) {
         suggestions = uniqCompact(suggestions);
@@ -130,11 +131,11 @@ async function buildMessage(wrongMentions, author, type, tags) {
  * @param {string} body The body of the post (used for social network checking)
  * @param {string} author The author of the post
  * @param {string[]} tags The tags of the post
- * @returns {Promise<{details:any,wrongMentions:string[]}>} The wrong mentions found and the details on their surroundings
+ * @returns {Promise<{details:any,wrongMentions:string[], correctMentions:string[]}>} The wrong mentions found, the details on their surroundings and the correct mentions
  */
 async function findWrongMentions(body, author, tags) {
     let wrongMentions = [];
-    const knownUsernames = [];
+    const correctMentions = [];
     const alreadyEncountered = [];
     const details = {};
     const mentionRegex = /(^|[^\w=/#])@([a-z][a-z\d.-]{1,16}[a-z\d])([\w(]|\.[a-z])?/gmu;
@@ -188,15 +189,15 @@ async function findWrongMentions(body, author, tags) {
         const existingUsernames = await checker.getExisting(wrongMentions);
         wrongMentions = wrongMentions.filter(mention => {
             if(existingUsernames.includes(mention)) {
-                if(mention !== author) knownUsernames.push(mention);
+                if(mention !== author) correctMentions.push(mention);
                 delete details[mention];
                 return false;
             }
             return true;
         });
     }
-    checker.addMentioned(author, knownUsernames);
-    return { details, wrongMentions };
+    checker.addMentioned(author, correctMentions);
+    return { details, wrongMentions, correctMentions };
 }
 
 /**
@@ -235,16 +236,16 @@ async function processPost(author, permlink, mustBeNew) {
             if(!metadata.tags) throw new Error('The tags property is ' + metadata.tags);
             if(!Array.isArray(metadata.tags)) throw new Error('The tags property isn\'t an array');
             if(!metadata.app || typeof metadata.app !== 'string' || !/share2steem/.test(metadata.app)) {
-                const { details, wrongMentions } = await findWrongMentions(content.body, author, metadata.tags);
+                const { details, wrongMentions, correctMentions } = await findWrongMentions(content.body, author, metadata.tags);
                 if(wrongMentions.length > 0) {
-                    const message = await buildMessage(wrongMentions, author, content.parent_author === '' ? 'post' : 'comment', metadata.tags);
+                    const message = await buildMessage(wrongMentions, correctMentions, author, content.parent_author === '' ? 'post' : 'comment', metadata.tags);
                     comments.push([message, author, permlink, 'Possible wrong mentions found', details]);
                 }
             }
         } catch(e) {
-            const { details, wrongMentions } = await findWrongMentions(content.body, author, []);
+            const { details, wrongMentions, correctMentions } = await findWrongMentions(content.body, author, []);
             if(wrongMentions.length > 0) {
-                const message = await buildMessage(wrongMentions, author, content.parent_author === '' ? 'post' : 'comment', []);
+                const message = await buildMessage(wrongMentions, correctMentions, author, content.parent_author === '' ? 'post' : 'comment', []);
                 comments.push([message, author, permlink, 'Possible wrong mentions found', details]);
             }
         }
@@ -389,5 +390,5 @@ async function sendComment(message, author, permlink, title, details) {
         const content = await steemer.getContent(author, permlink);
         const { wrongMentions } = await findWrongMentions(content.body, author, []);
         if(wrongMentions.length === 0) upvoter.addCandidate(author, permlink);
-    }, 24 * 60 * 60 * 1000);
+    }, test_environment ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000); // 15 minutes in test environment, 24 hours in production environment
 }

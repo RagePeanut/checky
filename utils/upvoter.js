@@ -9,7 +9,7 @@ let candidates = [];
  */
 function init(_steemer) {
     steemer = _steemer;
-    setInterval(upvoteRandomCandidate, (24 / 9) * 60 * 60 * 1000);
+    setInterval(upvoteRandomCandidate, test_environment ? 30 * 60 * 1000 : (24 / 9) * 60 * 60 * 1000); // 30 minutes in test environment, ~2.66 hours in production environment
 }
 
 /**
