@@ -24,9 +24,11 @@ function addCandidate(author, permlink) {
  * Upvotes a random candidate from the upvote `candidates`
  */
 function upvoteRandomCandidate() {
-    const candidate = candidates[Math.floor(Math.random() * candidates.length)];
-    candidates = [];
-    steemer.broadcastUpvote(candidate.author, candidate.permlink);
+    if(candidates.length > 0) {
+        const candidate = candidates[Math.floor(Math.random() * candidates.length)];
+        candidates = [];
+        steemer.broadcastUpvote(candidate.author, candidate.permlink);
+    }
 }
 
 module.exports = {
