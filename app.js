@@ -379,7 +379,7 @@ async function sendComment(message, author, permlink, title, details) {
         ]
     }
     const footer = '\n\n###### If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with `!help`.';
-    if(test_environment) console.log(author, permlink, message, details);
+    if(test_environment) console.log(author, permlink, '\n', message);
     else await steemer.broadcastComment(author, permlink, 'checky', 're-' + author.replace(/\./g, '') + '-' + permlink, title, message + footer, JSON.stringify(metadata));
     // Making sure that the 20 seconds delay between comments is respected
     setTimeout(() => {
