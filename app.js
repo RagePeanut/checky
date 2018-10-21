@@ -204,14 +204,10 @@ async function findWrongMentions(body, author, tags) {
  */
 function prepareComment() {
     if(comments[0]) {
-        if(test_environment) {
-            console.log(comments.shift());
-        } else {
-            // Making sure that no comment is sent while processing this one
-            clearInterval(commentsInterval);
-            const comment = comments.shift();
-            sendComment(comment[0], comment[1], comment[2], comment[3], comment[4] || {});
-        }
+        // Making sure that no comment is sent while processing this one
+        clearInterval(commentsInterval);
+        const comment = comments.shift();
+        sendComment(comment[0], comment[1], comment[2], comment[3], comment[4] || {});
     }
 }
 
@@ -221,40 +217,38 @@ function prepareComment() {
  * @param {string} permlink The permlink of the post
  * @param {boolean} mustBeNew Post must be new (true) or can have been updated (false)
  */
-function processPost(author, permlink, mustBeNew) {
-    steemer.getContent(author, permlink)
-        .then(content => {
-            if(mustBeNew && content.last_update === content.created) {
-                const delay = checker.getUser(author).delay;
-                if(delay > 0) {
-                    setTimeout(() => { 
-                        processPost(author, permlink, false);
-                    }, delay * 60 * 1000);
-                } else mustBeNew = false;
-            }
-            if(!mustBeNew) {
-                try {
-                    const metadata = JSON.parse(content.json_metadata);
-                    if(!metadata) throw new Error('The metadata is ' + metadata);
-                    if(typeof metadata !== 'object') throw new Error('The metadata isn of type ' + typeof metadata);
-                    if(!metadata.tags) throw new Error('The tags property is ' + metadata.tags);
-                    if(!Array.isArray(metadata.tags)) throw new Error('The tags property isn\'t an array');
-                    if(!metadata.app || typeof metadata.app !== 'string' || !/share2steem/.test(metadata.app)) {
-                        const { details, wrongMentions } = await findWrongMentions(content.body, author, metadata.tags);
-                        if(wrongMentions.length > 0) {
-                            const message = await buildMessage(wrongMentions, author, content.parent_author === '' ? 'post' : 'comment', metadata.tags);
-                            comments.push([message, author, permlink, 'Possible wrong mentions found', details]);
-                        }
-                    }
-                } catch(e) {
-                    const { details, wrongMentions } = await findWrongMentions(content.body, author, []);
-                    if(wrongMentions.length > 0) {
-                        const message = await buildMessage(wrongMentions, author, content.parent_author === '' ? 'post' : 'comment', []);
-                        comments.push([message, author, permlink, 'Possible wrong mentions found', details]);
-                    }
+async function processPost(author, permlink, mustBeNew) {
+    const content = await steemer.getContent(author, permlink);
+    if(mustBeNew && content.last_update === content.created) {
+        const delay = checker.getUser(author).delay;
+        if(delay > 0) {
+            setTimeout(() => { 
+                processPost(author, permlink, false);
+            }, delay * 60 * 1000);
+        } else mustBeNew = false;
+    }
+    if(!mustBeNew) {
+        try {
+            const metadata = JSON.parse(content.json_metadata);
+            if(!metadata) throw new Error('The metadata is ' + metadata);
+            if(typeof metadata !== 'object') throw new Error('The metadata isn of type ' + typeof metadata);
+            if(!metadata.tags) throw new Error('The tags property is ' + metadata.tags);
+            if(!Array.isArray(metadata.tags)) throw new Error('The tags property isn\'t an array');
+            if(!metadata.app || typeof metadata.app !== 'string' || !/share2steem/.test(metadata.app)) {
+                const { details, wrongMentions } = await findWrongMentions(content.body, author, metadata.tags);
+                if(wrongMentions.length > 0) {
+                    const message = await buildMessage(wrongMentions, author, content.parent_author === '' ? 'post' : 'comment', metadata.tags);
+                    comments.push([message, author, permlink, 'Possible wrong mentions found', details]);
                 }
             }
-        });
+        } catch(e) {
+            const { details, wrongMentions } = await findWrongMentions(content.body, author, []);
+            if(wrongMentions.length > 0) {
+                const message = await buildMessage(wrongMentions, author, content.parent_author === '' ? 'post' : 'comment', []);
+                comments.push([message, author, permlink, 'Possible wrong mentions found', details]);
+            }
+        }
+    }
 }
 
 /**
@@ -384,13 +378,14 @@ async function sendComment(message, author, permlink, title, details) {
         ]
     }
     const footer = '\n\n###### If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with `!help`.';
-    await steemer.broadcastComment(author, permlink, 'checky', 're-' + author.replace(/\./g, '') + '-' + permlink, title, message + footer, JSON.stringify(metadata));
+    if(test_environment) console.log(author, permlink, message, details);
+    else await steemer.broadcastComment(author, permlink, 'checky', 're-' + author.replace(/\./g, '') + '-' + permlink, title, message + footer, JSON.stringify(metadata));
     // Making sure that the 20 seconds delay between comments is respected
     setTimeout(() => {
         commentsInterval = setInterval(prepareComment, 1000)
     }, 19000);
     // Adding the post to the upvote candidates if the wrong mentions have been edited in the day following @checky's comment
-    setTimeout(() => {
+    setTimeout(async () => {
         const content = await steemer.getContent(author, permlink);
         const { wrongMentions } = await findWrongMentions(content.body, author, []);
         if(wrongMentions.length === 0) upvoter.addCandidate(author, permlink);

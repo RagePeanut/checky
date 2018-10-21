@@ -1,4 +1,5 @@
 let steemer = require('./steemer');
+const { test_environment } = require('../config');
 
 let candidates = [];
 
@@ -27,7 +28,8 @@ function upvoteRandomCandidate() {
     if(candidates.length > 0) {
         const candidate = candidates[Math.floor(Math.random() * candidates.length)];
         candidates = [];
-        steemer.broadcastUpvote(candidate.author, candidate.permlink);
+        if(test_environment) console.log(candidate);
+        else steemer.broadcastUpvote(candidate.author, candidate.permlink);
     }
 }
 
