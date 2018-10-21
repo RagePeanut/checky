@@ -126,64 +126,6 @@ async function buildMessage(wrongMentions, author, type, tags) {
 }
 
 /**
- * Prepares a comment and makes sure that no comment is being sent before this one
- */
-function prepareComment() {
-    if(comments[0]) {
-        if(test_environment) {
-            console.log(comments.shift());
-        } else {
-            // Making sure that no comment is sent while processing this one
-            clearInterval(commentsInterval);
-            const comment = comments.shift();
-            sendComment(comment[0], comment[1], comment[2], comment[3], comment[4] || {});
-        }
-    }
-}
-
-/**
- * Calls processMentions after a certain delay set by the author
- * @param {string} author The author of the post
- * @param {string} permlink The permlink of the post
- * @param {boolean} mustBeNew Post must be new (true) or can have been updated (false)
- */
-function processPost(author, permlink, mustBeNew) {
-    steemer.getContent(author, permlink)
-        .then(content => {
-            if(mustBeNew && content.last_update === content.created) {
-                const delay = checker.getUser(author).delay;
-                if(delay > 0) {
-                    setTimeout(() => { 
-                        processPost(author, permlink, false);
-                    }, delay * 60 * 1000);
-                } else mustBeNew = false;
-            }
-            if(!mustBeNew) {
-                try {
-                    const metadata = JSON.parse(content.json_metadata);
-                    if(!metadata) throw new Error('The metadata is ' + metadata);
-                    if(typeof metadata !== 'object') throw new Error('The metadata isn of type ' + typeof metadata);
-                    if(!metadata.tags) throw new Error('The tags property is ' + metadata.tags);
-                    if(!Array.isArray(metadata.tags)) throw new Error('The tags property isn\'t an array');
-                    if(!metadata.app || typeof metadata.app !== 'string' || !/share2steem/.test(metadata.app)) {
-                        const { details, wrongMentions } = await findWrongMentions(content.body, author, metadata.tags);
-                        if(wrongMentions.length > 0) {
-                            const message = await buildMessage(wrongMentions, author, content.parent_author === '' ? 'post' : 'comment', metadata.tags);
-                            comments.push([message, author, permlink, 'Possible wrong mentions found', details]);
-                        }
-                    }
-                } catch(e) {
-                    const { details, wrongMentions } = await findWrongMentions(content.body, author, []);
-                    if(wrongMentions.length > 0) {
-                        const message = await buildMessage(wrongMentions, author, content.parent_author === '' ? 'post' : 'comment', []);
-                        comments.push([message, author, permlink, 'Possible wrong mentions found', details]);
-                    }
-                }
-            }
-        });
-}
-
-/**
  * Finds all the wrong mentions in the body of a post
  * @param {string} body The body of the post (used for social network checking)
  * @param {string} author The author of the post
@@ -255,6 +197,64 @@ async function findWrongMentions(body, author, tags) {
     }
     checker.addMentioned(author, knownUsernames);
     return { details, wrongMentions };
+}
+
+/**
+ * Prepares a comment and makes sure that no comment is being sent before this one
+ */
+function prepareComment() {
+    if(comments[0]) {
+        if(test_environment) {
+            console.log(comments.shift());
+        } else {
+            // Making sure that no comment is sent while processing this one
+            clearInterval(commentsInterval);
+            const comment = comments.shift();
+            sendComment(comment[0], comment[1], comment[2], comment[3], comment[4] || {});
+        }
+    }
+}
+
+/**
+ * Calls processMentions after a certain delay set by the author
+ * @param {string} author The author of the post
+ * @param {string} permlink The permlink of the post
+ * @param {boolean} mustBeNew Post must be new (true) or can have been updated (false)
+ */
+function processPost(author, permlink, mustBeNew) {
+    steemer.getContent(author, permlink)
+        .then(content => {
+            if(mustBeNew && content.last_update === content.created) {
+                const delay = checker.getUser(author).delay;
+                if(delay > 0) {
+                    setTimeout(() => { 
+                        processPost(author, permlink, false);
+                    }, delay * 60 * 1000);
+                } else mustBeNew = false;
+            }
+            if(!mustBeNew) {
+                try {
+                    const metadata = JSON.parse(content.json_metadata);
+                    if(!metadata) throw new Error('The metadata is ' + metadata);
+                    if(typeof metadata !== 'object') throw new Error('The metadata isn of type ' + typeof metadata);
+                    if(!metadata.tags) throw new Error('The tags property is ' + metadata.tags);
+                    if(!Array.isArray(metadata.tags)) throw new Error('The tags property isn\'t an array');
+                    if(!metadata.app || typeof metadata.app !== 'string' || !/share2steem/.test(metadata.app)) {
+                        const { details, wrongMentions } = await findWrongMentions(content.body, author, metadata.tags);
+                        if(wrongMentions.length > 0) {
+                            const message = await buildMessage(wrongMentions, author, content.parent_author === '' ? 'post' : 'comment', metadata.tags);
+                            comments.push([message, author, permlink, 'Possible wrong mentions found', details]);
+                        }
+                    }
+                } catch(e) {
+                    const { details, wrongMentions } = await findWrongMentions(content.body, author, []);
+                    if(wrongMentions.length > 0) {
+                        const message = await buildMessage(wrongMentions, author, content.parent_author === '' ? 'post' : 'comment', []);
+                        comments.push([message, author, permlink, 'Possible wrong mentions found', details]);
+                    }
+                }
+            }
+        });
 }
 
 /**
@@ -389,4 +389,10 @@ async function sendComment(message, author, permlink, title, details) {
     setTimeout(() => {
         commentsInterval = setInterval(prepareComment, 1000)
     }, 19000);
+    // Adding the post to the upvote candidates if the wrong mentions have been edited in the day following @checky's comment
+    setTimeout(() => {
+        const content = await steemer.getContent(author, permlink);
+        const { wrongMentions } = await findWrongMentions(content.body, author, []);
+        if(wrongMentions.length === 0) upvoter.addCandidate(author, permlink);
+    }, 24 * 60 * 60 * 1000);
 }

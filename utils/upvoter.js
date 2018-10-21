@@ -1,10 +1,10 @@
-let candidates = [];
+let steemer = require('./steemer');
 
-let steemer;
+let candidates = [];
 
 /**
  * Initializes the upvoter
- * @param {any} _steemer The instance of steemer used by the bot
+ * @param {steemer} _steemer The instance of steemer used by the bot
  */
 function init(_steemer) {
     steemer = _steemer;
