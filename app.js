@@ -395,21 +395,27 @@ async function sendComment(message, author, permlink, title, details) {
             if(wrongMentions.length === 0) {
                 // Entry to the upvote candidates for authors that removed the wrong mentions from their post
                 upvoter.addCandidate(author, permlink);
-                const commentContent = await steemer.getContent('checky', commentPermlink);
-                // Bonus entry to the upvote candidates if the author of the post upvoted @checky's comment
-                if(commentContent.active_votes.some(vote => vote.voter === author && vote.percent > 0)) {
-                    upvoter.addCandidate(author, permlink);
-                }
-                // Deleting the comment if it hasn't been interacted with
-                if(commentContent.net_votes === 0 && commentContent.children === 0) {
-                    steemer.broadcastDeleteComment('checky', commentPermlink);
-                }
-            } else {
-                setTimeout(() => {
+                if(test_environment) console.log('Comment deletion after one day for', commentPermlink);
+                else {
                     const commentContent = await steemer.getContent('checky', commentPermlink);
+                    // Bonus entry to the upvote candidates if the author of the post upvoted @checky's comment
+                    if(commentContent.active_votes.some(vote => vote.voter === author && vote.percent > 0)) {
+                        upvoter.addCandidate(author, permlink);
+                    }
                     // Deleting the comment if it hasn't been interacted with
                     if(commentContent.net_votes === 0 && commentContent.children === 0) {
                         steemer.broadcastDeleteComment('checky', commentPermlink);
+                    }
+                }
+            } else {
+                setTimeout(() => {
+                    if(test_environment) console.log('Comment deletion after 6 days for', commentPermlink);
+                    else {
+                        const commentContent = await steemer.getContent('checky', commentPermlink);
+                        // Deleting the comment if it hasn't been interacted with
+                        if(commentContent.net_votes === 0 && commentContent.children === 0) {
+                            steemer.broadcastDeleteComment('checky', commentPermlink);
+                        }
                     }
                 }, test_environment ? 60 * 60 * 1000 : 5 * 24 * 60 * 60 * 1000); // 1 hour in test environment, 5 days in production environment
             }
