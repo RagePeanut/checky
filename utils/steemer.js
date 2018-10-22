@@ -30,9 +30,29 @@ async function broadcastComment(parentAuthor, parentPermlink, permlink, title, b
 }
 
 /**
+ * Broadcasts an operation to delete a comment
+ * @param {string} permlink The permlink of the comment
+ * @returns {Promise<void>} An empty promise resolved after the comment has been deleted
+ */
+async function broadcastDeleteComment(permlink) {
+    try {
+        await steem.broadcast.deleteCommentAsync(postingKey, 'checky', permlink);
+        return;
+    } catch(err) {
+        if(log_errors) console.error(`Broadcast error (deleteComment): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await broadcastDeleteComment(permlink);
+    }
+}
+
+/**
  * Broadcasts an upvote
  * @param {string} author The author of the post to upvote
  * @param {string} permlink The permlink of the post to upvote
+ * @returns {Promise<void>} An empty promise resolved after the upvote has been broadcasted
  */
 async function broadcastUpvote(author, permlink) {
     try {
@@ -144,6 +164,7 @@ function updateNodes(callback) {
 
 module.exports = {
     broadcastComment,
+    broadcastDeleteComment,
     broadcastUpvote,
     getContent,
     getTagsByAuthor,
