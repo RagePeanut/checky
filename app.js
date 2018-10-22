@@ -413,7 +413,7 @@ async function sendComment(message, author, permlink, title, details) {
                     }
                 }
             } else {
-                setTimeout(() => {
+                setTimeout(async () => {
                     if(test_environment) console.log('Comment deletion after 6 days for', commentPermlink);
                     else {
                         const commentContent = await steemer.getContent('checky', commentPermlink);
