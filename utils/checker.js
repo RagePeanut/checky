@@ -2,16 +2,16 @@ const fs = require('fs');
 const steno = require('steno');
 const { log_errors } = require('../config');
 const { merge } = require('./helper');
+let steemer = require('./steemer');
 
 const unallowedUsernameRegex = /(^|\.)[\d.-]|[.-](\.|$)|-{2}|.{17}|(^|\.).{0,2}(\.|$)/;
 
 // Creating a users object
 let users = {};
-let steemer;
 
 /**
- * Initializes the username checker's variables
- * @param {any} _steemer The instance of steemer used by the bot
+ * Initializes the username checker
+ * @param {steemer} _steemer The instance of steemer used by the bot
  */
 function init(_steemer) {
     // Updating `users` with the content of ./data/users.json if the file exists 

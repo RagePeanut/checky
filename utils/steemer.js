@@ -13,19 +13,38 @@ let nodes = [fail_safe_node];
  * @param {string} title The title of the comment
  * @param {string} body The body of the comment
  * @param {string} jsonMetadata The stringified metadata attached to the comment
- * @returns {Promise<void>} An empty promise returned when the comment has been broadcasted
+ * @returns {Promise<void>} An empty promise resolved after the comment has been broadcasted
  */
 async function broadcastComment(parentAuthor, parentPermlink, permlink, title, body, jsonMetadata) {
     try {
         await steem.broadcast.commentAsync(postingKey, parentAuthor, parentPermlink, 'checky', permlink, title, body, jsonMetadata);
         return;
     } catch(err) {
-        if(log_errors) console.error(`Broadcast error: ${ err.message } with ${ nodes[0] }`);
+        if(log_errors) console.error(`Broadcast error (comment): ${ err.message } with ${ nodes[0] }`);
         // Putting the node where the error comes from at the end of the array
         nodes.push(nodes.shift());
         steem.api.setOptions({ url: nodes[0] });
         if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
         return await broadcastComment(parentAuthor, parentPermlink, permlink, title, body, jsonMetadata);
+    }
+}
+
+/**
+ * Broadcasts an upvote
+ * @param {string} author The author of the post to upvote
+ * @param {string} permlink The permlink of the post to upvote
+ */
+async function broadcastUpvote(author, permlink) {
+    try {
+        await steem.broadcast.voteAsync(postingKey, 'checky', author, permlink, 10000);
+        return;
+    } catch(err) {
+        if(log_errors) console.error(`Broadcast error (upvote): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await broadcastUpvote(author, permlink);
     }
 }
 
@@ -125,6 +144,7 @@ function updateNodes(callback) {
 
 module.exports = {
     broadcastComment,
+    broadcastUpvote,
     getContent,
     getTagsByAuthor,
     getTrendingTags,

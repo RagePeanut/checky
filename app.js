@@ -2,6 +2,8 @@ const steem = require('steem');
 const steemer = require('./utils/steemer');
 const checker = require('./utils/checker');
 checker.init(steemer);
+const upvoter = require('./utils/upvoter');
+upvoter.init(steemer);
 const { kebabCase, trim, uniqCompact } = require('./utils/helper');
 const { fail_safe_node, log_errors, test_environment} = require('./config');
 const { version } = require('./package');
@@ -93,66 +95,47 @@ function stream() {
 }
 
 /**
- * Prepares a comment and makes sure that no comment is being sent before this one
- */
-function prepareComment() {
-    if(comments[0]) {
-        if(test_environment) {
-            console.log(comments.shift());
-        } else {
-            // Making sure that no comment is sent while processing this one
-            clearInterval(commentsInterval);
-            const comment = comments.shift();
-            sendComment(comment[0], comment[1], comment[2], comment[3], comment[4] || {});
-        }
-    }
-}
-
-/**
- * Calls processMentions after a certain delay set by the author
+ * Builds a message with suggested corrections based on the wrong mentions found in a post
+ * @param {string[]} wrongMentions The wrong mentions found in the post
+ * @param {string[]} correctMentions The correct mentions found in the post
  * @param {string} author The author of the post
- * @param {string} permlink The permlink of the post
- * @param {boolean} mustBeNew Post must be new (true) or can have been updated (false)
+ * @param {string} type The type of the post (post or comment)
+ * @param {string[]} tags The tags of the post
  */
-function processPost(author, permlink, mustBeNew) {
-    steemer.getContent(author, permlink)
-        .then(content => {
-            if(mustBeNew && content.last_update === content.created) {
-                const delay = checker.getUser(author).delay;
-                if(delay > 0) {
-                    setTimeout(() => { 
-                        processPost(author, permlink, false);
-                    }, delay * 60 * 1000);
-                } else mustBeNew = false;
-            }
-            if(!mustBeNew) {
-                try {
-                    const metadata = JSON.parse(content.json_metadata);
-                    if(!metadata) throw new Error('The metadata is ' + metadata);
-                    if(typeof metadata !== 'object') throw new Error('The metadata isn of type ' + typeof metadata);
-                    if(!metadata.tags) throw new Error('The tags property is ' + metadata.tags);
-                    if(!Array.isArray(metadata.tags)) throw new Error('The tags property isn\'t an array');
-                    if(!metadata.app || typeof metadata.app !== 'string' || !/share2steem/.test(metadata.app)) {
-                        processMentions(content.body, author, permlink, content.parent_author === '' ? 'post' : 'comment', metadata.tags);
-                    }
-                } catch(e) {
-                    processMentions(content.body, author, permlink, content.parent_author === '' ? 'post' : 'comment', []);
+async function buildMessage(wrongMentions, correctMentions, author, type, tags) {
+    let message = `Hi @${ author }, I'm @checky ! While checking the mentions made in this ${ type } I noticed that @${ wrongMentions[0] }`;
+    const promises = wrongMentions.map(mention => checker.correct(mention, author, correctMentions, tags));
+    let suggestions = await Promise.all(promises);
+    if(wrongMentions.length > 1) {
+        suggestions = uniqCompact(suggestions);
+        let lastSentence = 'Maybe you made some typos';
+        if(suggestions.length > 0) {
+            lastSentence = 'Did you mean to write ' + suggestions[0];
+            if(suggestions.length > 1) {
+                for(let i = 1; i < suggestions.length - 1; i++) {
+                    lastSentence += ', ' + suggestions[i];
                 }
+                lastSentence += ' and ' + suggestions[suggestions.length - 1];
             }
-        });
+        }
+        for(let i = 1; i < wrongMentions.length - 1; i++) {
+            message += ', @' + wrongMentions[i];
+        }
+        message += ` and @${ wrongMentions[wrongMentions.length - 1]} don't exist on Steem. ${ lastSentence } ?`;
+    } else message += ` doesn't exist on Steem. ${ suggestions[0] ? 'Did you mean to write ' + suggestions[0] : 'Maybe you made a typo' } ?`;
+    return message;
 }
 
 /**
  * Finds all the wrong mentions in the body of a post
  * @param {string} body The body of the post (used for social network checking)
  * @param {string} author The author of the post
- * @param {string} permlink The permlink of the post
- * @param {string} type The type of the post (post or comment)
  * @param {string[]} tags The tags of the post
+ * @returns {Promise<{details:any,wrongMentions:string[], correctMentions:string[]}>} The wrong mentions found, the details on their surroundings and the correct mentions
  */
-async function processMentions(body, author, permlink, type, tags) {
-    let mentions = [];
-    const knownUsernames = [];
+async function findWrongMentions(body, author, tags) {
+    let wrongMentions = [];
+    const correctMentions = [];
     const alreadyEncountered = [];
     const details = {};
     const mentionRegex = /(^|[^\w=/#])@([a-z][a-z\d.-]{1,16}[a-z\d])([\w(]|\.[a-z])?/gmu;
@@ -195,51 +178,78 @@ async function processMentions(body, author, permlink, type, tags) {
                                                         .replace(new RegExp('(@<em></em>' + mention + ')([\\w(]|\\.[a-z])?', 'g'), '<strong>$1</strong>$2')
                                                         .replace(/^ */gm, '> '))
                         );
-                        mentions.push(mention);
+                        wrongMentions.push(mention);
                     }
                 }
             }
         }
     }
-    if(mentions.length > 0) {
+    if(wrongMentions.length > 0) {
         // Removing existing usernames
-        const existingUsernames = await checker.getExisting(mentions);
-        mentions = mentions.filter(mention => {
+        const existingUsernames = await checker.getExisting(wrongMentions);
+        wrongMentions = wrongMentions.filter(mention => {
             if(existingUsernames.includes(mention)) {
-                if(mention !== author) knownUsernames.push(mention);
+                if(mention !== author) correctMentions.push(mention);
                 delete details[mention];
                 return false;
             }
             return true;
         });
-        // At this point, the mentions array can only contain wrong mentions, building and sending a message if the array is not empty
-        if(mentions.length > 0) {
-            let message = `Hi @${ author }, I'm @checky ! While checking the mentions made in this ${ type } I noticed that @${ mentions[0] }`;
-            const promises = mentions.map(mention => checker.correct(mention, author, knownUsernames, tags));
-            Promise.all(promises)
-                .then(suggestions => {
-                    checker.addMentioned(author, knownUsernames);
-                    if(mentions.length > 1) {
-                        suggestions = uniqCompact(suggestions);
-                        let lastSentence = 'Maybe you made some typos';
-                        if(suggestions.length > 0) {
-                            lastSentence = 'Did you mean to write ' + suggestions[0];
-                            if(suggestions.length > 1) {
-                                for(let i = 1; i < suggestions.length - 1; i++) {
-                                    lastSentence += ', ' + suggestions[i];
-                                }
-                                lastSentence += ' and ' + suggestions[suggestions.length - 1];
-                            }
-                        }
-                        for(let i = 1; i < mentions.length - 1; i++) {
-                            message += ', @' + mentions[i];
-                        }
-                        message += ` and @${ mentions[mentions.length - 1]} don't exist on Steem. ${ lastSentence } ?`;
-                    } else message += ` doesn't exist on Steem. ${ suggestions[0] ? 'Did you mean to write ' + suggestions[0] : 'Maybe you made a typo' } ?`;
+    }
+    checker.addMentioned(author, correctMentions);
+    return { details, wrongMentions, correctMentions };
+}
+
+/**
+ * Prepares a comment and makes sure that no comment is being sent before this one
+ */
+function prepareComment() {
+    if(comments[0]) {
+        // Making sure that no comment is sent while processing this one
+        clearInterval(commentsInterval);
+        const comment = comments.shift();
+        sendComment(comment[0], comment[1], comment[2], comment[3], comment[4] || {});
+    }
+}
+
+/**
+ * Calls processMentions after a certain delay set by the author
+ * @param {string} author The author of the post
+ * @param {string} permlink The permlink of the post
+ * @param {boolean} mustBeNew Post must be new (true) or can have been updated (false)
+ */
+async function processPost(author, permlink, mustBeNew) {
+    const content = await steemer.getContent(author, permlink);
+    if(mustBeNew && content.last_update === content.created) {
+        const delay = checker.getUser(author).delay;
+        if(delay > 0) {
+            setTimeout(() => { 
+                processPost(author, permlink, false);
+            }, delay * 60 * 1000);
+        } else mustBeNew = false;
+    }
+    if(!mustBeNew) {
+        try {
+            const metadata = JSON.parse(content.json_metadata);
+            if(!metadata) throw new Error('The metadata is ' + metadata);
+            if(typeof metadata !== 'object') throw new Error('The metadata isn of type ' + typeof metadata);
+            if(!metadata.tags) throw new Error('The tags property is ' + metadata.tags);
+            if(!Array.isArray(metadata.tags)) throw new Error('The tags property isn\'t an array');
+            if(!metadata.app || typeof metadata.app !== 'string' || !/share2steem/.test(metadata.app)) {
+                const { details, wrongMentions, correctMentions } = await findWrongMentions(content.body, author, metadata.tags);
+                if(wrongMentions.length > 0) {
+                    const message = await buildMessage(wrongMentions, correctMentions, author, content.parent_author === '' ? 'post' : 'comment', metadata.tags);
                     comments.push([message, author, permlink, 'Possible wrong mentions found', details]);
-                });
+                }
+            }
+        } catch(e) {
+            const { details, wrongMentions, correctMentions } = await findWrongMentions(content.body, author, []);
+            if(wrongMentions.length > 0) {
+                const message = await buildMessage(wrongMentions, correctMentions, author, content.parent_author === '' ? 'post' : 'comment', []);
+                comments.push([message, author, permlink, 'Possible wrong mentions found', details]);
+            }
         }
-    } else checker.addMentioned(author, knownUsernames);
+    }
 }
 
 /**
@@ -356,7 +366,7 @@ async function processCommand(command, params, target, author, permlink, parent_
  * @param {string} title The title of the comment to broadcast
  * @param {any} details The details about where the wrong mentions have been found
  */
-function sendComment(message, author, permlink, title, details) {
+async function sendComment(message, author, permlink, title, details) {
     if(title.length > 255) title = title.slice(0, 252) + '...';
     const metadata = {
         app: 'checky/' + version,
@@ -369,11 +379,29 @@ function sendComment(message, author, permlink, title, details) {
         ]
     }
     const footer = '\n\n###### If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with `!help`.';
-    steemer.broadcastComment(author, permlink, 'checky', 're-' + author.replace(/\./g, '') + '-' + permlink, title, message + footer, JSON.stringify(metadata))
-        .then(() => {
-            // Making sure that the 20 seconds delay between comments is respected
-            setTimeout(() => {
-                commentsInterval = setInterval(prepareComment, 1000)
-            }, 19000);
-        });
+    const commentPermlink = 're-' + author.replace(/\./g, '') + '-' + permlink;
+    if(test_environment) console.log(author, permlink, '\n', message);
+    else await steemer.broadcastComment(author, permlink, 'checky', commentPermlink, title, message + footer, JSON.stringify(metadata));
+    // Making sure that the 20 seconds delay between comments is respected
+    setTimeout(() => {
+        commentsInterval = setInterval(prepareComment, 1000)
+    }, 19000);
+    // Checking if the comment is a reply to a post (details exists) or a reply to a command (details doesn't exist)
+    if(details) {
+        // Adding the post to the upvote candidates if the wrong mentions have been edited in the day following @checky's comment
+        setTimeout(async () => {
+            const content = await steemer.getContent(author, permlink);
+            const { wrongMentions } = await findWrongMentions(content.body, author, []);
+            if(wrongMentions.length === 0) {
+                // Entry to the upvote candidates for authors that removed the wrong mentions from their post
+                upvoter.addCandidate(author, permlink);
+                const commentContent = await steemer.getContent('checky', commentPermlink);
+                // Bonus entry to the upvote candidates if the author of the post upvoted @checky's comment
+                if(commentContent.active_votes.some(vote => vote.voter === author && vote.percent > 0)) {
+                    upvoter.addCandidate(author, permlink);
+                }
+
+            }
+        }, test_environment ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000); // 15 minutes in test environment, 24 hours in production environment
+    }
 }
