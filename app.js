@@ -404,7 +404,15 @@ async function sendComment(message, author, permlink, title, details) {
                 if(commentContent.net_votes === 0 && commentContent.children === 0) {
                     steemer.broadcastDeleteComment('checky', commentPermlink);
                 }
+            } else {
+                setTimeout(() => {
+                    const commentContent = await steemer.getContent('checky', commentPermlink);
+                    // Deleting the comment if it hasn't been interacted with
+                    if(commentContent.net_votes === 0 && commentContent.children === 0) {
+                        steemer.broadcastDeleteComment('checky', commentPermlink);
+                    }
+                }, test_environment ? 60 * 60 * 1000 : 5 * 24 * 60 * 60 * 1000); // 1 hour in test environment, 5 days in production environment
             }
-        }, test_environment ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000); // 15 minutes in test environment, 24 hours in production environment
+        }, test_environment ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000); // 15 minutes in test environment, 1 day in production environment
     }
 }
