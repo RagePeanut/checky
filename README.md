@@ -19,9 +19,10 @@ npm start
 ```
 
 ## Configuration
-If none of the default nodes work, you can change them in the **config.json** file. You will find two arrays in this file. 
-* ***request_nodes*** **-** contains the RPC nodes used by the app to get posts informations (those need to be full nodes).
-* ***stream_nodes*** **-** contains the RPC nodes used by the app to stream operations (those can be low memory nodes).
+You can change a few things in the **config.json** file, mainly for testing purposes.
+* ***log_errors*** **-** whether or not you want to log Steem related errors (broadcast, stream and api) to the console (default: false).
+* ***fail_safe_node*** **-** a safe node to use if @fullnodeupdate returns an empty array on its first call (default: https://api.steemit.com).
+* ***test_environment*** **-** whether or not you are running the bot in a test environment, being in a test environment logs to the console instead of broadcasting to the blockchain (default: false).
 
 ## Commands
 The following commands must be typed in reply to one of [@checky](https://steemit.com/@checky)'s posts or comments and not be preceded by any text to work.
