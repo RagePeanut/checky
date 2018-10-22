@@ -379,8 +379,9 @@ async function sendComment(message, author, permlink, title, details) {
         ]
     }
     const footer = '\n\n###### If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with `!help`.';
+    const commentPermlink = 're-' + author.replace(/\./g, '') + '-' + permlink;
     if(test_environment) console.log(author, permlink, '\n', message);
-    else await steemer.broadcastComment(author, permlink, 'checky', 're-' + author.replace(/\./g, '') + '-' + permlink, title, message + footer, JSON.stringify(metadata));
+    else await steemer.broadcastComment(author, permlink, 'checky', commentPermlink, title, message + footer, JSON.stringify(metadata));
     // Making sure that the 20 seconds delay between comments is respected
     setTimeout(() => {
         commentsInterval = setInterval(prepareComment, 1000)
@@ -391,7 +392,16 @@ async function sendComment(message, author, permlink, title, details) {
         setTimeout(async () => {
             const content = await steemer.getContent(author, permlink);
             const { wrongMentions } = await findWrongMentions(content.body, author, []);
-            if(wrongMentions.length === 0) upvoter.addCandidate(author, permlink);
+            if(wrongMentions.length === 0) {
+                // Entry to the upvote candidates for authors that removed the wrong mentions from their post
+                upvoter.addCandidate(author, permlink);
+                const commentContent = await steemer.getContent('checky', commentPermlink);
+                // Bonus entry to the upvote candidates if the author of the post upvoted @checky's comment
+                if(commentContent.active_votes.some(vote => vote.voter === author && vote.percent > 0)) {
+                    upvoter.addCandidate(author, permlink);
+                }
+
+            }
         }, test_environment ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000); // 15 minutes in test environment, 24 hours in production environment
     }
 }
