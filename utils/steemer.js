@@ -36,7 +36,7 @@ async function broadcastComment(parentAuthor, parentPermlink, permlink, title, b
  */
 async function broadcastUpvote(author, permlink) {
     try {
-        await steem.broadcast.upvoteAsync(postingKey, 'checky', author, permlink, 10000);
+        await steem.broadcast.voteAsync(postingKey, 'checky', author, permlink, 10000);
         return;
     } catch(err) {
         if(log_errors) console.error(`Broadcast error (upvote): ${ err.message } with ${ nodes[0] }`);

@@ -385,10 +385,13 @@ async function sendComment(message, author, permlink, title, details) {
     setTimeout(() => {
         commentsInterval = setInterval(prepareComment, 1000)
     }, 19000);
-    // Adding the post to the upvote candidates if the wrong mentions have been edited in the day following @checky's comment
-    setTimeout(async () => {
-        const content = await steemer.getContent(author, permlink);
-        const { wrongMentions } = await findWrongMentions(content.body, author, []);
-        if(wrongMentions.length === 0) upvoter.addCandidate(author, permlink);
-    }, test_environment ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000); // 15 minutes in test environment, 24 hours in production environment
+    // Checking if the comment is a reply to a post (details exists) or a reply to a command (details doesn't exist)
+    if(details) {
+        // Adding the post to the upvote candidates if the wrong mentions have been edited in the day following @checky's comment
+        setTimeout(async () => {
+            const content = await steemer.getContent(author, permlink);
+            const { wrongMentions } = await findWrongMentions(content.body, author, []);
+            if(wrongMentions.length === 0) upvoter.addCandidate(author, permlink);
+        }, test_environment ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000); // 15 minutes in test environment, 24 hours in production environment
+    }
 }
