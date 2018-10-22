@@ -380,8 +380,9 @@ async function sendComment(message, author, permlink, title, details) {
     }
     const footer = '\n\n###### If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with `!help`.';
     const commentPermlink = 're-' + author.replace(/\./g, '') + '-' + permlink;
+    const jsonMetadata = JSON.stringify(metadata);
     if(test_environment) console.log(author, permlink, '\n', message);
-    else await steemer.broadcastComment(author, permlink, 'checky', commentPermlink, title, message + footer, JSON.stringify(metadata));
+    else await steemer.broadcastComment(author, permlink, commentPermlink, title, message + footer, jsonMetadata);
     // Making sure that the 20 seconds delay between comments is respected
     setTimeout(() => {
         commentsInterval = setInterval(prepareComment, 1000)
@@ -404,7 +405,11 @@ async function sendComment(message, author, permlink, title, details) {
                     }
                     // Deleting the comment if it hasn't been interacted with
                     if(commentContent.net_votes === 0 && commentContent.children === 0) {
-                        steemer.broadcastDeleteComment('checky', commentPermlink);
+                        steemer.broadcastDeleteComment(commentPermlink);
+                    // Replacing the comment's content if it can't be deleted
+                    } else {
+                        message = 'This post had a mistake in its mentions that has been corrected in less than a day. Thank you for your quick edit !';
+                        steemer.broadcastComment(author, permlink, commentPermlink, title, message + footer, jsonMetadata);
                     }
                 }
             } else {
@@ -414,7 +419,7 @@ async function sendComment(message, author, permlink, title, details) {
                         const commentContent = await steemer.getContent('checky', commentPermlink);
                         // Deleting the comment if it hasn't been interacted with
                         if(commentContent.net_votes === 0 && commentContent.children === 0) {
-                            steemer.broadcastDeleteComment('checky', commentPermlink);
+                            steemer.broadcastDeleteComment(commentPermlink);
                         }
                     }
                 }, test_environment ? 60 * 60 * 1000 : 5 * 24 * 60 * 60 * 1000); // 1 hour in test environment, 5 days in production environment

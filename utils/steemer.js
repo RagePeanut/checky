@@ -31,13 +31,12 @@ async function broadcastComment(parentAuthor, parentPermlink, permlink, title, b
 
 /**
  * Broadcasts an operation to delete a comment
- * @param {string} author The author of the comment
  * @param {string} permlink The permlink of the comment
  * @returns {Promise<void>} An empty promise resolved after the comment has been deleted
  */
-async function broadcastDeleteComment(author, permlink) {
+async function broadcastDeleteComment(permlink) {
     try {
-        await steem.broadcast.deleteCommentAsync(postingKey, author, permlink);
+        await steem.broadcast.deleteCommentAsync(postingKey, 'checky', permlink);
         return;
     } catch(err) {
         if(log_errors) console.error(`Broadcast error (deleteComment): ${ err.message } with ${ nodes[0] }`);
@@ -45,7 +44,7 @@ async function broadcastDeleteComment(author, permlink) {
         nodes.push(nodes.shift());
         steem.api.setOptions({ url: nodes[0] });
         if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
-        return await broadcastDeleteComment(author, permlink);
+        return await broadcastDeleteComment(permlink);
     }
 }
 
