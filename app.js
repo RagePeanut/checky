@@ -400,7 +400,10 @@ async function sendComment(message, author, permlink, title, details) {
                 if(commentContent.active_votes.some(vote => vote.voter === author && vote.percent > 0)) {
                     upvoter.addCandidate(author, permlink);
                 }
-
+                // Deleting the comment if it hasn't been interacted with
+                if(commentContent.net_votes === 0 && commentContent.children === 0) {
+                    steemer.broadcastDeleteComment('checky', commentPermlink);
+                }
             }
         }, test_environment ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000); // 15 minutes in test environment, 24 hours in production environment
     }
