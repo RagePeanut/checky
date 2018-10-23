@@ -3,6 +3,7 @@ const { test_environment } = require('../config');
 
 let save = {
     candidates: [],
+    last_upvote: new Date().toJSON(),
     not_checked: []
 };
 
@@ -16,7 +17,13 @@ function init(_steemer) {
         if(fs.existsSync('data/save.json')) save = require('../data/save');
     } else fs.mkdirSync('data');
     steemer = _steemer;
-    setInterval(upvoteRandomCandidate, test_environment ? 1.5 * 60 * 60 * 1000 : (24 / 9) * 60 * 60 * 1000); // 90 minutes in test environment, ~2.66 hours in production environment
+    const lastUpvoteDistance = new Date() - new Date(save.last_upvote);
+    const upvoteInterval = test_environment ? 1.5 * 60 * 60 * 1000 : (24 / 9) * 60 * 60 * 1000; // 90 minutes in test environment, ~2.66 hours in production environment
+    const firstUpvoteTimeout = upvoteInterval - lastUpvoteDistance;
+    setTimeout(() => {
+        upvoteRandomCandidate();
+        setInterval(upvoteRandomCandidate, upvoteInterval);
+    }, firstUpvoteTimeout < 0 ? firstUpvoteTimeout : 0);
 }
 
 /**
@@ -48,6 +55,7 @@ async function upvoteRandomCandidate() {
         if(test_environment) console.log(candidate);
         else {
             await steemer.broadcastUpvote(candidate.author, candidate.permlink);
+            save.last_upvote = new Date().toJSON();
             updateSaveFile();
         }
     }
