@@ -396,9 +396,8 @@ async function sendComment(message, author, permlink, title, details, isEdit) {
             'checky'
         ]
     }
-    const commentPermlink = 're-' + author.replace(/\./g, '') + '-' + permlink;
     if(test_environment) console.log(author, permlink, '\n', message);
-    else await steemer.broadcastComment(author, permlink, commentPermlink, title, message + commentFooter, JSON.stringify(metadata));
+    else await steemer.broadcastComment(author, permlink, title, message + commentFooter, JSON.stringify(metadata));
     // Making sure that the 20 seconds delay between comments is respected
     setTimeout(() => {
         commentsInterval = setInterval(prepareComment, 1000)

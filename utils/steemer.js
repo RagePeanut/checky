@@ -9,13 +9,13 @@ let nodes = [fail_safe_node];
  * Broadcasts a comment
  * @param {string} parentAuthor The author of the post to reply to
  * @param {string} parentPermlink The permlink of the post to reply to
- * @param {string} permlink The permlink of the comment
  * @param {string} title The title of the comment
  * @param {string} body The body of the comment
  * @param {string} jsonMetadata The stringified metadata attached to the comment
  * @returns {Promise<void>} An empty promise resolved after the comment has been broadcasted
  */
-async function broadcastComment(parentAuthor, parentPermlink, permlink, title, body, jsonMetadata) {
+async function broadcastComment(parentAuthor, parentPermlink, title, body, jsonMetadata) {
+    const permlink = 're-' + parentAuthor.replace(/\./g, '') + '-' + parentPermlink;
     try {
         await steem.broadcast.commentAsync(postingKey, parentAuthor, parentPermlink, 'checky', permlink, title, body, jsonMetadata);
         return;
@@ -25,7 +25,7 @@ async function broadcastComment(parentAuthor, parentPermlink, permlink, title, b
         nodes.push(nodes.shift());
         steem.api.setOptions({ url: nodes[0] });
         if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
-        return await broadcastComment(parentAuthor, parentPermlink, permlink, title, body, jsonMetadata);
+        return await broadcastComment(parentAuthor, parentPermlink, title, body, jsonMetadata);
     }
 }
 
