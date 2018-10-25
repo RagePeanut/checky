@@ -26,7 +26,7 @@ function init(_steemer) {
     setTimeout(() => {
         upvoteRandomCandidate();
         setInterval(upvoteRandomCandidate, upvoteInterval);
-    }, firstUpvoteTimeout < 0 ? firstUpvoteTimeout : 0);
+    }, firstUpvoteTimeout);
 }
 
 /**

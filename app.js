@@ -8,10 +8,13 @@ checker.init(steemer);
 const upvoter = require('./utils/upvoter');
 upvoter.init(steemer);
 const { kebabCase, trim, uniqCompact } = require('./utils/helper');
+
 const { fail_safe_node, log_errors, test_environment} = require('./config');
 const { version } = require('./package');
 
 const comments = [];
+const commentFooter = '\n\n###### If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with `!help`.';
+const suggestionCommentTitle = 'Possible wrong mentions found';
 // Checking every second if a comment has to be sent and sending it
 let commentsInterval = setInterval(prepareComment, 1000);
 
@@ -253,14 +256,14 @@ async function processPost(author, permlink, mustBeNew) {
                 const { details, wrongMentions, correctMentions } = await findWrongMentions(content.body, author, metadata.tags);
                 if(wrongMentions.length > 0) {
                     const message = await buildMessage(wrongMentions, correctMentions, author, content.parent_author === '' ? 'post' : 'comment', metadata.tags);
-                    comments.push([message, author, permlink, 'Possible wrong mentions found', details]);
+                    comments.push([message, author, permlink, suggestionCommentTitle, details]);
                 }
             }
         } catch(e) {
             const { details, wrongMentions, correctMentions } = await findWrongMentions(content.body, author, []);
             if(wrongMentions.length > 0) {
                 const message = await buildMessage(wrongMentions, correctMentions, author, content.parent_author === '' ? 'post' : 'comment', []);
-                comments.push([message, author, permlink, 'Possible wrong mentions found', details]);
+                comments.push([message, author, permlink, suggestionCommentTitle, details]);
             }
         }
     }
@@ -392,11 +395,9 @@ async function sendComment(message, author, permlink, title, details) {
             'checky'
         ]
     }
-    const footer = '\n\n###### If you found this comment useful, consider upvoting it to help keep this bot running. You can see a list of all available commands by replying with `!help`.';
     const commentPermlink = 're-' + author.replace(/\./g, '') + '-' + permlink;
-    const jsonMetadata = JSON.stringify(metadata);
     if(test_environment) console.log(author, permlink, '\n', message);
-    else await steemer.broadcastComment(author, permlink, commentPermlink, title, message + footer, jsonMetadata);
+    else await steemer.broadcastComment(author, permlink, commentPermlink, title, message + commentFooter, JSON.stringify(metadata));
     // Making sure that the 20 seconds delay between comments is respected
     setTimeout(() => {
         commentsInterval = setInterval(prepareComment, 1000)
@@ -406,11 +407,8 @@ async function sendComment(message, author, permlink, title, details) {
         toRecheck[author + '/' + permlink] = {
             comment_permlink: commentPermlink,
             created: new Date().toJSON(),
-            footer,
-            jsonMetadata,
-            first_recheck: true,
-            timeout: test_environment ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000, // 15 minutes in test environment, 1 day in production environment
-            title
+            details,
+            first_recheck: true
         }
         updateStateFile();
         recheckPost(author, permlink);
@@ -432,7 +430,10 @@ function updateStateFile() {
 function recheckPost(author, permlink) {
     const uri = author + '/' + permlink;
     const lastCheckDistance = new Date() - new Date(toRecheck[uri].created);
-    const timeout = toRecheck[uri].timeout - lastCheckDistance;
+    let timeout;
+    if(toRecheck[uri].first_recheck) timeout = test_environment ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000 // 15 minutes in test environment, 1 day in production environment
+    else timeout = test_environment ? 60 * 60 * 1000 : 5 * 24 * 60 * 60 * 1000 // 1 hour in test environment, 5 days in production environment
+    timeout -= lastCheckDistance;
     const commentPermlink = toRecheck[uri].comment_permlink;
     // Adding the post to the upvote candidates if the wrong mentions have been edited in the day following @checky's comment
     setTimeout(async () => {
@@ -455,14 +456,22 @@ function recheckPost(author, permlink) {
                     // Replacing the comment's content if it can't be deleted
                     } else {
                         const message = 'This post had a mistake in its mentions that has been corrected in less than a day. Thank you for your quick edit !';
-                        await steemer.broadcastComment(author, permlink, commentPermlink, toRecheck[uri].title, message + toRecheck[uri].footer, toRecheck[uri].jsonMetadata);
+                        const metadata = {
+                            app: 'checky/' + version,
+                            details: toRecheck[uri].details,
+                            format: 'markdown',
+                            tags: [
+                                'mentions', 
+                                'bot',
+                                'checky'
+                            ]
+                        }
+                        await steemer.broadcastComment(author, permlink, commentPermlink, toRecheck[uri].title, message + commentFooter, JSON.parse(metadata));
                     }
                 }
                 delete toRecheck[uri];
                 updateStateFile();
             } else {
-                // 1 hour in test environment, 5 days in production environment
-                toRecheck[uri].timeout = test_environment ? 60 * 60 * 1000 : 5 * 24 * 60 * 60 * 1000
                 toRecheck[uri].first_recheck = false;
                 updateStateFile();
                 recheckPost(author, permlink);
