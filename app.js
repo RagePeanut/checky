@@ -410,7 +410,6 @@ async function sendComment(message, author, permlink, title, details, isEdit) {
             updateStateFile();
         } else {
             toRecheck[author + '/' + permlink] = {
-                comment_permlink: commentPermlink,
                 created: new Date().toJSON(),
                 details,
                 first_recheck: true
@@ -440,7 +439,7 @@ function recheckPost(author, permlink) {
     if(toRecheck[uri].first_recheck) timeout = test_environment ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000 // 15 minutes in test environment, 1 day in production environment
     else timeout = test_environment ? 60 * 60 * 1000 : 5 * 24 * 60 * 60 * 1000 // 1 hour in test environment, 5 days in production environment
     timeout -= lastCheckDistance;
-    const commentPermlink = toRecheck[uri].comment_permlink;
+    const commentPermlink = 're-' + author.replace(/\./g, '') + '-' + permlink;
     // Adding the post to the upvote candidates if the wrong mentions have been edited in the day following @checky's comment
     setTimeout(async () => {
         if(toRecheck[uri].first_recheck) {
