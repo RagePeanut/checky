@@ -225,7 +225,7 @@ function prepareComment() {
         // Making sure that no comment is sent while processing this one
         clearInterval(commentsInterval);
         const comment = comments.shift();
-        sendComment(comment[0], comment[1], comment[2], comment[3], comment[4] || {});
+        sendComment(comment[0], comment[1], comment[2], comment[3], comment[4] || null, comment[5] || false);
     }
 }
 
@@ -256,14 +256,14 @@ async function processPost(author, permlink, mustBeNew) {
                 const { details, wrongMentions, correctMentions } = await findWrongMentions(content.body, author, metadata.tags);
                 if(wrongMentions.length > 0) {
                     const message = await buildMessage(wrongMentions, correctMentions, author, content.parent_author === '' ? 'post' : 'comment', metadata.tags);
-                    comments.push([message, author, permlink, suggestionCommentTitle, details]);
+                    comments.push([message, author, permlink, suggestionCommentTitle, details, false]);
                 }
             }
         } catch(e) {
             const { details, wrongMentions, correctMentions } = await findWrongMentions(content.body, author, []);
             if(wrongMentions.length > 0) {
                 const message = await buildMessage(wrongMentions, correctMentions, author, content.parent_author === '' ? 'post' : 'comment', []);
-                comments.push([message, author, permlink, suggestionCommentTitle, details]);
+                comments.push([message, author, permlink, suggestionCommentTitle, details, false]);
             }
         }
     }
@@ -382,8 +382,9 @@ async function processCommand(command, params, target, author, permlink, parent_
  * @param {string} permlink The permlink of the post to reply to
  * @param {string} title The title of the comment to broadcast
  * @param {any} details The details about where the wrong mentions have been found
+ * @param {boolean} isEdit Whether or not the operation is a comment edit
  */
-async function sendComment(message, author, permlink, title, details) {
+async function sendComment(message, author, permlink, title, details, isEdit) {
     if(title.length > 255) title = title.slice(0, 252) + '...';
     const metadata = {
         app: 'checky/' + version,
@@ -402,16 +403,21 @@ async function sendComment(message, author, permlink, title, details) {
     setTimeout(() => {
         commentsInterval = setInterval(prepareComment, 1000)
     }, 19000);
-    // Checking if the comment is a reply to a post (details exists) or a reply to a command (details doesn't exist)
+    // Checking if the comment is a reply to a post details exists) or a reply to a command (details doesn't exist)
     if(details) {
-        toRecheck[author + '/' + permlink] = {
-            comment_permlink: commentPermlink,
-            created: new Date().toJSON(),
-            details,
-            first_recheck: true
+        if(isEdit) {
+            delete toRecheck[uri];
+            updateStateFile();
+        } else {
+            toRecheck[author + '/' + permlink] = {
+                comment_permlink: commentPermlink,
+                created: new Date().toJSON(),
+                details,
+                first_recheck: true
+            }
+            updateStateFile();
+            recheckPost(author, permlink);
         }
-        updateStateFile();
-        recheckPost(author, permlink);
     }
 }
 
@@ -453,24 +459,14 @@ function recheckPost(author, permlink) {
                     // Deleting the comment if it hasn't been interacted with
                     if(commentContent.net_votes === 0 && commentContent.children === 0) {
                         await steemer.broadcastDeleteComment(commentPermlink);
+                        delete toRecheck[uri];
+                        updateStateFile();
                     // Replacing the comment's content if it can't be deleted
                     } else {
                         const message = 'This post had a mistake in its mentions that has been corrected in less than a day. Thank you for your quick edit !';
-                        const metadata = {
-                            app: 'checky/' + version,
-                            details: toRecheck[uri].details,
-                            format: 'markdown',
-                            tags: [
-                                'mentions', 
-                                'bot',
-                                'checky'
-                            ]
-                        }
-                        await steemer.broadcastComment(author, permlink, commentPermlink, toRecheck[uri].title, message + commentFooter, JSON.parse(metadata));
+                        comments.push([message, author, permlink, suggestionCommentTitle, toRecheck[uri].details, true]);
                     }
                 }
-                delete toRecheck[uri];
-                updateStateFile();
             } else {
                 toRecheck[uri].first_recheck = false;
                 updateStateFile();
