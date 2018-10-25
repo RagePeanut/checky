@@ -1,4 +1,7 @@
+const fs = require('fs');
+const steno = require('steno');
 const steem = require('steem');
+
 const steemer = require('./utils/steemer');
 const checker = require('./utils/checker');
 checker.init(steemer);
@@ -12,12 +15,23 @@ const comments = [];
 // Checking every second if a comment has to be sent and sending it
 let commentsInterval = setInterval(prepareComment, 1000);
 
-let alreadyStreaming = false;
+// The posts from the previous run that haven't been fully rechecked
+let toRecheck = {};
+// Updating `toRecheck` with the content of ./data/rechecker.json if the file exists 
+if(fs.existsSync('data')) {
+    if(fs.existsSync('data/rechecker.json')) toRecheck = require('./data/rechecker');
+} else fs.mkdirSync('data');
+for(const post in toRecheck) {
+    const [author, permlink] = post.split('/');
+    recheckPost(author, permlink);
+}
+
+let streaming = false;
 let nodes = [fail_safe_node];
 steemer.updateNodes(newNodes => {
     nodes = newNodes;
-    if(!alreadyStreaming) {
-        alreadyStreaming = true;
+    if(!streaming) {
+        streaming = true;
         stream();
     }
 });
@@ -389,8 +403,40 @@ async function sendComment(message, author, permlink, title, details) {
     }, 19000);
     // Checking if the comment is a reply to a post (details exists) or a reply to a command (details doesn't exist)
     if(details) {
-        // Adding the post to the upvote candidates if the wrong mentions have been edited in the day following @checky's comment
-        setTimeout(async () => {
+        toRecheck[author + '/' + permlink] = {
+            comment_permlink: commentPermlink,
+            created: new Date().toJSON(),
+            footer,
+            jsonMetadata,
+            first_recheck: true,
+            timeout: test_environment ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000, // 15 minutes in test environment, 1 day in production environment
+            title
+        }
+        updateStateFile();
+        recheckPost(author, permlink);
+    }
+}
+
+/** Updates the ./data/rechecker.json file with the content of the state object */
+function updateStateFile() {
+    steno.writeFile('data/rechecker.json', JSON.stringify(toRecheck), err => {
+        if(err && log_errors) console.error(err.message);
+    });
+}
+
+/**
+ * Rechecks the mentions of a post after some time
+ * @param {string} author The author of the post
+ * @param {string} permlink The permlink of the post
+ */
+function recheckPost(author, permlink) {
+    const uri = author + '/' + permlink;
+    const lastCheckDistance = new Date() - new Date(toRecheck[uri].created);
+    const timeout = toRecheck[uri].timeout - lastCheckDistance;
+    const commentPermlink = toRecheck[uri].comment_permlink;
+    // Adding the post to the upvote candidates if the wrong mentions have been edited in the day following @checky's comment
+    setTimeout(async () => {
+        if(toRecheck[uri].first_recheck) {
             const content = await steemer.getContent(author, permlink);
             const { wrongMentions } = await findWrongMentions(content.body, author, []);
             if(wrongMentions.length === 0) {
@@ -405,25 +451,33 @@ async function sendComment(message, author, permlink, title, details) {
                     }
                     // Deleting the comment if it hasn't been interacted with
                     if(commentContent.net_votes === 0 && commentContent.children === 0) {
-                        steemer.broadcastDeleteComment(commentPermlink);
+                        await steemer.broadcastDeleteComment(commentPermlink);
                     // Replacing the comment's content if it can't be deleted
                     } else {
-                        message = 'This post had a mistake in its mentions that has been corrected in less than a day. Thank you for your quick edit !';
-                        steemer.broadcastComment(author, permlink, commentPermlink, title, message + footer, jsonMetadata);
+                        const message = 'This post had a mistake in its mentions that has been corrected in less than a day. Thank you for your quick edit !';
+                        await steemer.broadcastComment(author, permlink, commentPermlink, toRecheck[uri].title, message + toRecheck[uri].footer, toRecheck[uri].jsonMetadata);
                     }
                 }
+                delete toRecheck[uri];
+                updateStateFile();
             } else {
-                setTimeout(async () => {
-                    if(test_environment) console.log('Comment deletion after 6 days for', commentPermlink);
-                    else {
-                        const commentContent = await steemer.getContent('checky', commentPermlink);
-                        // Deleting the comment if it hasn't been interacted with
-                        if(commentContent.net_votes === 0 && commentContent.children === 0) {
-                            steemer.broadcastDeleteComment(commentPermlink);
-                        }
-                    }
-                }, test_environment ? 60 * 60 * 1000 : 5 * 24 * 60 * 60 * 1000); // 1 hour in test environment, 5 days in production environment
+                // 1 hour in test environment, 5 days in production environment
+                toRecheck[uri].timeout = test_environment ? 60 * 60 * 1000 : 5 * 24 * 60 * 60 * 1000
+                toRecheck[uri].first_recheck = false;
+                updateStateFile();
+                recheckPost(author, permlink);
             }
-        }, test_environment ? 15 * 60 * 1000 : 24 * 60 * 60 * 1000); // 15 minutes in test environment, 1 day in production environment
-    }
+        } else {
+            if(test_environment) console.log('Comment deletion after 6 days for', commentPermlink);
+            else {
+                const commentContent = await steemer.getContent('checky', commentPermlink);
+                // Deleting the comment if it hasn't been interacted with
+                if(commentContent.net_votes === 0 && commentContent.children === 0) {
+                    await steemer.broadcastDeleteComment(commentPermlink);
+                }
+            }
+            delete toRecheck[uri];
+            updateStateFile();
+        }
+    }, timeout);
 }
