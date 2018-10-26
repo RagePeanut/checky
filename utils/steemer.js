@@ -89,6 +89,66 @@ async function getContent(author, permlink) {
 }
 
 /**
+ * Gets the followers and the followees of `account`
+ * @param {string} account The username of the account
+ * @returns {Promise<Set<string>>} The follow circle of `account`
+ */
+async function getFollowCircle(account) {
+    const [followers, followees] = await Promise.all([getFollowers(account, ''), getFollowees(account, '')]);
+    const followCircle = new Set(followers);
+    followees.forEach(followee => followCircle.add(followee));
+    return followCircle;
+}
+
+/**
+ * Gets the followers of `account`
+ * @param {string} account The username of the account
+ * @param {string} [start] The username to start at (included)
+ * @returns {Promise<string[]>} The followers of `account`
+ */
+async function getFollowers(account, start = '') {
+    try {
+        const followers = await steem.api.getFollowers(account, start, 'blog', 1000);
+        if(followers.length < 1000) return followers.map(relation => relation.follower);
+        else {
+            start = followers[followers.length - 1].replace(/.$/, match => String.fromCharCode(match.charCodeAt(0) + 1));
+            return followers.concat(await getFollowers(account, start));
+        }
+    } catch(err) {
+        if(log_errors) console.error(`Request error (getFollowers): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await getFollowers(account, start);
+    }
+}
+
+/**
+ * Gets the followees of `account`
+ * @param {string} account The username of the account
+ * @param {string} [start] The username to start at (included)
+ * @returns {Promise<string[]>} The followees of `account`
+ */
+async function getFollowees(account, start = '') {
+    try {
+        const followees = await steem.api.getFollowing(account, start, 'blog', 1000);
+        if(followees.length < 1000) return followees.map(relation => relation.following);
+        else {
+            start = followees[followees.length - 1].replace(/.$/, match => String.fromCharCode(match.charCodeAt(0) + 1));
+            return followees.concat(await getFollowees(account, start));
+        }
+    } catch(err) {
+        if(log_errors) console.error(`Request error (getFollowing): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await getFollowees(account, start);
+    }
+}
+
+/**
  * Gets the tags used by `author`
  * @param {string} author The author that used those tags
  * @returns {Promise<string[]>} The tags used by `author`
@@ -167,6 +227,7 @@ module.exports = {
     broadcastDeleteComment,
     broadcastUpvote,
     getContent,
+    getFollowCircle,
     getTagsByAuthor,
     getTrendingTags,
     lookupAccountNames,
