@@ -88,15 +88,18 @@ async function correct(username, author, otherMentions, tags) {
     }
     if(suggestions.length > 0) {
         if(suggestions.length === 1) return '@<em></em>' + highlightDifferences(username, suggestions[0]);
-        // Trying to find the better suggestion based on the mentions made by the author in the post and, if needed, in his previous posts
+        // Trying to find a suggestion based on the mentions made by the author in the post and, if needed, in his previous posts
         suggestion = suggestions.find(mention => otherMentions.includes(mention) || users[author].mentioned.includes(mention));
+        if(suggestion) return '@<em></em>' + highlightDifferences(username, suggestion);
+        // Trying to find a suggestion based on the followers and followees of the author of the post
+        const followCircle = await steemer.getFollowCircle(author);
+        suggestion = suggestions.find(mention => followCircle.has(mention));
         if(suggestion) return '@<em></em>' + highlightDifferences(username, suggestion);
         // Suggesting the most mentioned username overall
         return '@<em></em>' + highlightDifferences(username, suggestions.sort((a, b) => users[b].occ - users[a].occ)[0]);
     } else if(await exists('the' + username)) return '@<em></em><strong>the</strong>' + username;
     // Testing for tags written as mentions
-    else if(tags.includes(username)) return '#' + username;
-    else if(await isTag(author, username, tags)) return '#' + username;
+    else if(tags.includes(username) || await isTag(author, username, tags)) return '#' + username;
     // No suggestion
     else return null;
 }
