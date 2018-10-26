@@ -108,11 +108,11 @@ async function getFollowCircle(account) {
  */
 async function getFollowers(account, start = '') {
     try {
-        const followers = await steem.api.getFollowers(account, start, 'blog', 1000);
+        const followers = await steem.api.getFollowersAsync(account, start, 'blog', 1000);
         if(followers.length < 1000) return followers.map(relation => relation.follower);
         else {
-            start = followers[followers.length - 1].replace(/.$/, match => String.fromCharCode(match.charCodeAt(0) + 1));
-            return followers.concat(await getFollowers(account, start));
+            start = followers[followers.length - 1].follower.replace(/.$/, match => String.fromCharCode(match.charCodeAt(0) + 1));
+            return followers.map(relation => relation.follower).concat(await getFollowers(account, start));
         }
     } catch(err) {
         if(log_errors) console.error(`Request error (getFollowers): ${ err.message } with ${ nodes[0] }`);
@@ -132,11 +132,11 @@ async function getFollowers(account, start = '') {
  */
 async function getFollowees(account, start = '') {
     try {
-        const followees = await steem.api.getFollowing(account, start, 'blog', 1000);
+        const followees = await steem.api.getFollowingAsync(account, start, 'blog', 1000);
         if(followees.length < 1000) return followees.map(relation => relation.following);
         else {
-            start = followees[followees.length - 1].replace(/.$/, match => String.fromCharCode(match.charCodeAt(0) + 1));
-            return followees.concat(await getFollowees(account, start));
+            start = followees[followees.length - 1].following.replace(/.$/, match => String.fromCharCode(match.charCodeAt(0) + 1));
+            return followees.map(relation => relation.following).concat(await getFollowees(account, start));
         }
     } catch(err) {
         if(log_errors) console.error(`Request error (getFollowing): ${ err.message } with ${ nodes[0] }`);
