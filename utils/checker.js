@@ -92,7 +92,8 @@ async function correct(username, author, otherMentions, tags) {
         suggestion = suggestions.find(mention => otherMentions.includes(mention) || users[author].mentioned.includes(mention));
         if(suggestion) return '@<em></em>' + highlightDifferences(username, suggestion);
         // Trying to find a suggestion based on the followers and followees of the author of the post
-        suggestion = suggestions.find(mention => (await steemer.getFollowCircle(author)).has(mention));
+        const followCircle = await steemer.getFollowCircle(author);
+        suggestion = suggestions.find(mention => followCircle.has(mention));
         if(suggestion) return '@<em></em>' + highlightDifferences(username, suggestion);
         // Suggesting the most mentioned username overall
         return '@<em></em>' + highlightDifferences(username, suggestions.sort((a, b) => users[b].occ - users[a].occ)[0]);
