@@ -155,7 +155,8 @@ async function findWrongMentions(body, author, tags) {
     const correctMentions = [];
     const alreadyEncountered = [];
     const details = {};
-    const mentionRegex = new RegExp(/(^|[^\w=/#])@([a-z][a-z\d.-]{1,16}[a-z\d])([\w(]|\.[a-z])?/, users[author].cs === 'i' ? 'gimu' : 'gmu');
+    const sensitivity = checker.getUser(author).cs === 'i' ? 'i' : '';
+    const mentionRegex = new RegExp(/(^|[^\w=/#])@([a-z][a-z\d.-]{1,16}[a-z\d])([\w(]|\.[a-z])?/, 'g' + sensitivity + 'mu');
     // All variations of the author username
     const authorRegex = new RegExp(author.replace(/([a-z]+|\d+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
     const imageOrDomainRegex = /\.(jpe?g|png|gif|com?|io|org|net|me)$/;
@@ -192,7 +193,7 @@ async function findWrongMentions(body, author, tags) {
                         details[mention] = (details[mention] || []).concat(
                             surrounding.map(text => text.replace(/!\[[^\]]*\]\([^)]*\)|<img [^>]+>/gi, '')
                                                         .replace(mentionRegex, '$1@<em></em>$2')
-                                                        .replace(new RegExp('@<em></em>' + mention + '(?![\\w(]|\\.[A-Za-z])', users[author].cs === 'i' ? 'gi' : 'g'), '<strong>$&</strong>')
+                                                        .replace(new RegExp('@<em></em>' + mention + '(?![\\w(]|\\.[A-Za-z])', 'g' + sensitivity), '<strong>$&</strong>')
                                                         .replace(/^ */gm, '> '))
                         );
                         wrongMentions.push(mention);
