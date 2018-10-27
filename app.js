@@ -378,7 +378,7 @@ async function processCommand(command, params, target, author, permlink, parent_
                 break;
             case 'help':
                 const message = `#### Here are all the available commands:
-* **!case** *[sensitive-insensitive]* **-** sets the case sensitivity of the mentions checking to sensitive (lowercase only) or insensitive (lowercase and uppercase).
+* **!case** *[sensitive-insensitive]* **-** sets the case sensitivity of the mentions checking to *sensitive* (lowercase only) or *insensitive* (lowercase and uppercase).
 * **!delay** *minutes* **-** tells the bot to wait X minutes before checking your posts.
 * **!help** **-** gives a list of commands and their explanations.
 * **!ignore** *username1* *username2* **-** tells the bot to ignore some usernames mentioned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).
