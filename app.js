@@ -155,7 +155,8 @@ async function findWrongMentions(body, author, tags) {
     const correctMentions = [];
     const alreadyEncountered = [];
     const details = {};
-    const mentionRegex = /(^|[^\w=/#])@([a-z][a-z\d.-]{1,16}[a-z\d])([\w(]|\.[a-z])?/gmu;
+    const sensitivity = checker.getUser(author).cs === 'i' ? 'i' : '';
+    const mentionRegex = new RegExp(/(^|[^\w=/#])@([a-z][a-z\d.-]{1,16}[a-z\d])([\w(]|\.[a-z])?/, 'g' + sensitivity + 'mu');
     // All variations of the author username
     const authorRegex = new RegExp(author.replace(/([a-z]+|\d+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
     const imageOrDomainRegex = /\.(jpe?g|png|gif|com?|io|org|net|me)$/;
@@ -190,9 +191,9 @@ async function findWrongMentions(body, author, tags) {
                             if(linkedPost && kebabCase(match[1] || match[6]) === kebabCase(linkedPost.title)) continue;
                         }
                         details[mention] = (details[mention] || []).concat(
-                            surrounding.map(text => text.replace(/!\[[^\]]*\]\([^)]*\)|<img [^>]+>/g, '')
+                            surrounding.map(text => text.replace(/!\[[^\]]*\]\([^)]*\)|<img [^>]+>/gi, '')
                                                         .replace(mentionRegex, '$1@<em></em>$2')
-                                                        .replace(new RegExp('(@<em></em>' + mention + ')([\\w(]|\\.[a-z])?', 'g'), '<strong>$1</strong>$2')
+                                                        .replace(new RegExp('@<em></em>' + mention + '(?![\\w(]|\\.[A-Za-z])', 'g' + sensitivity), '<strong>$&</strong>')
                                                         .replace(/^ */gm, '> '))
                         );
                         wrongMentions.push(mention);
@@ -283,6 +284,16 @@ async function processCommand(command, params, target, author, permlink, parent_
     else {
         const targetData = checker.getUser(target);
         switch(command) {
+            case 'case':
+                if(params) {
+                    // Removing white spaces arround the parameter
+                    const sensitivity = trim(params);
+                    if(sensitivity[0] === 's' || sensitivity[0] === 'i') {
+                        checker.setCaseSensitivity(target, sensitivity);
+                        comments.push([`The case sensitivity for the mentions checking has been set to *${ sensitivity[0] === 's' ? 'sensitive' : 'insensitive' }* for your account.`, author, permlink, `Case sensitivity set to ${ sensitivity[0] === 's' ? 'sensitive' : 'insensitive' }`]);
+                    } else comments.push([`The ${ sensitivity } sensitivity doesn\'t exist. Please try again by using *sensitive* or *insensitive* as the parameter.`, author, permlink, 'Wrong sensitivity specified']);
+                } else comments.push([`You didn't specify any sensitivity. Please try again by using the format \`!${ command } sensitivity\`.`, author, permlink, 'No sensitivity specified']);
+                break;
             case 'ignore':
                 if(params) {
                     const mentions = params.split(/[\s,]+/).filter(mention => mention !== '').map(mention => mention.replace('@', '').toLowerCase());
@@ -366,7 +377,21 @@ async function processCommand(command, params, target, author, permlink, parent_
                 }
                 break;
             case 'help':
-                const message = '#### Here are all the available commands:\n* **!delay** *minutes* **-** tells the bot to wait X minutes before checking your posts.\n* **!help** **-** gives a list of commands and their explanations.\n* **!ignore** *username1* *username2* **-** tells the bot to ignore some usernames mentioned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).\n* **!mode** *[regular-advanced-off]* **-** sets the mentions checking to regular (only posts), advanced (posts and comments) or off (no checking). Alternatively, you can write *normal* or *on* instead of *regular*. You can also write *plus* instead of *advanced*.\n* **!off** **-** shortcut for **!mode off**.\n* **!on** **-** shortcut for **!mode on**.\n* **!state** **-** gives the state of your account (*regular*, *advanced* or *off*).\n* **!switch** *[regular-advanced-off]* **-** same as **!mode**.\n* **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentioned in your posts.\n* **!wait** *minutes* **-** same as **!delay**.\n* **!where** *username1* *username2* **-** asks the bot to show where in the post it found typos for the specified mentions. Alternatively, you can write this command with no parameters and it will show you where it found all the mentions with typos in them.\n\n###### Any idea on how to improve this bot ? Please contact @ragepeanut on any of his posts or send him a direct message on Discord (RagePeanut#8078).';
+                const message = `#### Here are all the available commands:
+* **!case** *[sensitive-insensitive]* **-** sets the case sensitivity of the mentions checking to *sensitive* (lowercase only) or *insensitive* (lowercase and uppercase).
+* **!delay** *minutes* **-** tells the bot to wait X minutes before checking your posts.
+* **!help** **-** gives a list of commands and their explanations.
+* **!ignore** *username1* *username2* **-** tells the bot to ignore some usernames mentioned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).
+* **!mode** *[regular-advanced-off]* **-** sets the mentions checking to regular (only posts), advanced (posts and comments) or off (no checking). Alternatively, you can write *normal* or *on* instead of *regular*. You can also write *plus* instead of *advanced*.
+* **!off** **-** shortcut for **!mode off**.
+* **!on** **-** shortcut for **!mode on**.
+* **!state** **-** gives the state of your account (*regular*, *advanced* or *off*).
+* **!switch** *[regular-advanced-off]* **-** same as **!mode**.
+* **!unignore** *username1* *username2* **-** tells the bot to unignore some usernames mentioned in your posts.
+* **!wait** *minutes* **-** same as **!delay**.
+* **!where** *username1* *username2* **-** asks the bot to show where in the post it found typos for the specified mentions. Alternatively, you can write this command with no parameters and it will show you where it found all the mentions with typos in them.
+                
+###### Any idea on how to improve this bot ? Please contact @ragepeanut on any of his posts or send him a direct message on Discord (RagePeanut#8078).`;
                 comments.push([message, author, permlink, 'Commands list']);
                 break;
             default:

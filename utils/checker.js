@@ -54,7 +54,14 @@ function addUsers(origin, ...usernames) {
     if(usernames.length > 0 && typeof usernames[0] === 'object') usernames = usernames[0];
     usernames.forEach(username => {
         if(username !== '' && !users.hasOwnProperty(username)) {
-            users[username] = { mode: 'regular', ignored: [], delay: 0, occ: 0, mentioned: [] };
+            users[username] = {
+                cs: 's',    // Case sensitivity
+                delay: 0,
+                ignored: [],
+                mentioned: [],
+                mode: 'regular',
+                occ: 0
+            };
         }
     });
 }
@@ -288,6 +295,15 @@ function removeIgnored(author, mentions) {
 }
 
 /**
+ * Sets the case sensitivity for a given user's mention checking
+ * @param {string} username The user's username
+ * @param {string} sensitivity The case censitivity to set
+ */
+function setCaseSensitivity(username, sensitivity) {
+    users[username].cs = sensitivity[0];
+}
+
+/**
  * Sets the delay before checking mentions for a given user
  * @param {string} username The user's username
  * @param {number} delay The delay to set
@@ -331,6 +347,7 @@ module.exports = {
     getUser,
     init,
     removeIgnored,
+    setCaseSensitivity,
     setDelay,
     setMode
 }
