@@ -155,7 +155,7 @@ async function findWrongMentions(body, author, tags) {
     const correctMentions = [];
     const alreadyEncountered = [];
     const details = {};
-    const mentionRegex = /(^|[^\w=/#])@([a-z][a-z\d.-]{1,16}[a-z\d])([\w(]|\.[a-z])?/gmu;
+    const mentionRegex = new RegExp(/(^|[^\w=/#])@([a-z][a-z\d.-]{1,16}[a-z\d])([\w(]|\.[a-z])?/, users[author].cs === 'i' ? 'gimu' : 'gmu');
     // All variations of the author username
     const authorRegex = new RegExp(author.replace(/([a-z]+|\d+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
     const imageOrDomainRegex = /\.(jpe?g|png|gif|com?|io|org|net|me)$/;
@@ -190,9 +190,9 @@ async function findWrongMentions(body, author, tags) {
                             if(linkedPost && kebabCase(match[1] || match[6]) === kebabCase(linkedPost.title)) continue;
                         }
                         details[mention] = (details[mention] || []).concat(
-                            surrounding.map(text => text.replace(/!\[[^\]]*\]\([^)]*\)|<img [^>]+>/g, '')
+                            surrounding.map(text => text.replace(/!\[[^\]]*\]\([^)]*\)|<img [^>]+>/gi, '')
                                                         .replace(mentionRegex, '$1@<em></em>$2')
-                                                        .replace(new RegExp('(@<em></em>' + mention + ')([\\w(]|\\.[a-z])?', 'g'), '<strong>$1</strong>$2')
+                                                        .replace(new RegExp('@<em></em>' + mention + '(?![\\w(]|\\.[A-Za-z])', users[author].cs === 'i' ? 'gi' : 'g'), '<strong>$&</strong>')
                                                         .replace(/^ */gm, '> '))
                         );
                         wrongMentions.push(mention);
@@ -376,9 +376,8 @@ async function processCommand(command, params, target, author, permlink, parent_
                 }
                 break;
             case 'help':
-                const message = 
-`#### Here are all the available commands:
-* **!case** *[sensitive-insensitive]* **-** sets the case sensitivity of the mentions checking to sensitive (lowercase usernames only) or insensitive (mixed case usernames).
+                const message = `#### Here are all the available commands:
+* **!case** *[sensitive-insensitive]* **-** sets the case sensitivity of the mentions checking to sensitive (lowercase only) or insensitive (lowercase and uppercase).
 * **!delay** *minutes* **-** tells the bot to wait X minutes before checking your posts.
 * **!help** **-** gives a list of commands and their explanations.
 * **!ignore** *username1* *username2* **-** tells the bot to ignore some usernames mentioned in your posts (useful to avoid the bot mistaking other social network accounts for Steem accounts).
