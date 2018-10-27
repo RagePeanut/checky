@@ -427,13 +427,14 @@ async function sendComment(message, author, permlink, title, details, isEdit) {
     setTimeout(() => {
         commentsInterval = setInterval(prepareComment, 1000)
     }, 19000);
-    // Checking if the comment is a reply to a post details exists) or a reply to a command (details doesn't exist)
+    // Checking if the comment is a reply to a post (details exists) or a reply to a command (details doesn't exist)
     if(details) {
+        const uri = author + '/' + permlink;
         if(isEdit) {
             delete toRecheck[uri];
             updateStateFile();
         } else {
-            toRecheck[author + '/' + permlink] = {
+            toRecheck[uri] = {
                 created: new Date().toJSON(),
                 details,
                 first_recheck: true

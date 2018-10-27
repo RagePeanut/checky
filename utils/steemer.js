@@ -210,7 +210,14 @@ async function lookupAccountNames(usernames) {
   */
 function updateNodes(callback) {
     steem.api.getAccounts(['fullnodeupdate'], (err, res) => {
-        if(err) console.log(err);// return updateNodes(callback);
+        if(err) {
+            if(log_errors) console.error(`Request error (getAccounts): ${ err.message } with ${ nodes[0] }`);
+            // Putting the node where the error comes from at the end of the array
+            nodes.push(nodes.shift());
+            steem.api.setOptions({ url: nodes[0] });
+            if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+            return updateNodes(callback);
+        }
         const newNodes = JSON.parse(res[0].json_metadata).nodes.filter(node => !/^wss/.test(node));
         const gotNewNodes = newNodes.length > 0;
         if(gotNewNodes) {
