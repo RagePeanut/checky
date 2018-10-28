@@ -65,8 +65,10 @@ function stream() {
                             if(command) {
                                 if(!command[1] || author !== 'ragepeanut') command[1] = author;
                                 processCommand(command[2], command[3], command[1], author, permlink, operation[1].parent_permlink);
+                                break;
                             }
-                        } else if(parentAuthor === '' && mode !== 'off' || mode === 'advanced') {
+                        }
+                        if(parentAuthor === '' && mode !== 'off' || mode === 'advanced') {
                             try {
                                 const metadata = JSON.parse(operation[1].json_metadata);
                                 if(metadata.tags.every(tag => !/no-?(bot|check)/.test(tag))) processPost(author, permlink, true);
