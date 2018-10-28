@@ -489,7 +489,7 @@ function recheckPost(author, permlink) {
                         updateStateFile();
                     // Replacing the comment's content if it can't be deleted
                     } else {
-                        const message = 'This post had a mistake in its mentions that has been corrected in less than a day. Thank you for your quick edit !';
+                        const message = 'This post contained some typos in its mentions that have been corrected in less than a day. Thank you for your quick edit !';
                         comments.push([message, author, permlink, suggestionCommentTitle, toRecheck[uri].details, true]);
                     }
                 }
