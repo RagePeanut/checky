@@ -473,15 +473,16 @@ function recheckPost(author, permlink) {
             const content = await steemer.getContent(author, permlink);
             const { wrongMentions } = await findWrongMentions(content.body, author, []);
             if(wrongMentions.length === 0) {
-                // Entry to the upvote candidates for authors that removed the wrong mentions from their post
-                upvoter.addCandidate(author, permlink);
                 if(test_environment) console.log('Comment deletion after one day for', commentPermlink);
                 else {
                     const commentContent = await steemer.getContent('checky', commentPermlink);
-                    // Bonus entry to the upvote candidates if the author of the post upvoted @checky's comment
-                    if(commentContent.active_votes.some(vote => vote.voter === author && vote.percent > 0)) {
-                        upvoter.addCandidate(author, permlink);
-                    }
+                    
+                    const authorVote = commentContent.active_votes.find(vote => vote.voter === author);
+                    // One entry to the upvote candidates for authors that haven't voted on @checky's comment
+                    if(!authorVote) upvoter.addCandidate(author, permlink);
+                    // Two entries to the upvote candidates for authors that have upvoted @checky's comment
+                    else if(authorVote.percent > 0) upvoter.addCandidate(author, permlink, 2);
+
                     // Deleting the comment if it hasn't been interacted with
                     if(commentContent.net_votes === 0 && commentContent.children === 0) {
                         await steemer.broadcastDeleteComment(commentPermlink);

@@ -33,9 +33,12 @@ function init(_steemer) {
  * Adds a candidate to the upvote candidates
  * @param {string} author The author of the post
  * @param {string} permlink The permlink of the post
+ * @param {number} [entries] The number of times the candidate should be added
  */
-function addCandidate(author, permlink) {
-    state.candidates.push({author, permlink});
+function addCandidate(author, permlink, entries = 1) {
+    for(let i = 0; i < entries; i++) {
+        state.candidates.push({author, permlink});
+    }
     updateStateFile();
 }
 
