@@ -1,7 +1,7 @@
 const steem = require('steem');
 const { fail_safe_node, log_errors } = require('../config');
 
-const postingKey = process.env.CHECKY_POSTING_KEY;
+const activeKey = process.env.CHECKY_ACTIVE_KEY;
 
 let nodes = [fail_safe_node];
 
@@ -17,7 +17,7 @@ let nodes = [fail_safe_node];
 async function broadcastComment(parentAuthor, parentPermlink, title, body, jsonMetadata) {
     const permlink = 're-' + parentAuthor.replace(/\./g, '') + '-' + parentPermlink;
     try {
-        await steem.broadcast.commentAsync(postingKey, parentAuthor, parentPermlink, 'checky', permlink, title, body, jsonMetadata);
+        await steem.broadcast.commentAsync(activeKey, parentAuthor, parentPermlink, 'checky', permlink, title, body, jsonMetadata);
         return;
     } catch(err) {
         if(log_errors) console.error(`Broadcast error (comment): ${ err.message } with ${ nodes[0] }`);
@@ -36,7 +36,7 @@ async function broadcastComment(parentAuthor, parentPermlink, title, body, jsonM
  */
 async function broadcastDeleteComment(permlink) {
     try {
-        await steem.broadcast.deleteCommentAsync(postingKey, 'checky', permlink);
+        await steem.broadcast.deleteCommentAsync(activeKey, 'checky', permlink);
         return;
     } catch(err) {
         if(log_errors) console.error(`Broadcast error (deleteComment): ${ err.message } with ${ nodes[0] }`);
@@ -56,7 +56,7 @@ async function broadcastDeleteComment(permlink) {
  */
 async function broadcastUpvote(author, permlink) {
     try {
-        await steem.broadcast.voteAsync(postingKey, 'checky', author, permlink, 10000);
+        await steem.broadcast.voteAsync(activeKey, 'checky', author, permlink, 10000);
         return;
     } catch(err) {
         if(log_errors) console.error(`Broadcast error (vote): ${ err.message } with ${ nodes[0] }`);
