@@ -68,6 +68,24 @@ async function broadcastUpvote(author, permlink) {
     }
 }
 
+/** Gets the SBD and Steem balances of @checky */
+async function getBalances() {
+    try {
+        const { balance, sbd_balance } = (await steem.api.getAccountsAsync(['checky']))[0];
+        return {
+            sbd: parseFloat(sbd_balance),
+            steem: parseFloat(balance)
+        };
+    } catch(err) {
+        if(log_errors) console.error(`Request error (getAccounts): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await getBalances();
+    }
+}
+
 /**
  * Gets the content of a post
  * @param {string} author The author of the post
@@ -251,9 +269,10 @@ module.exports = {
     broadcastComment,
     broadcastDeleteComment,
     broadcastUpvote,
-    getLowestAsk,
+    getBalances,
     getContent,
     getFollowCircle,
+    getLowestAsk,
     getTagsByAuthor,
     getTrendingTags,
     lookupAccountNames,
