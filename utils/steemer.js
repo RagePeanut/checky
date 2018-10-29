@@ -59,7 +59,7 @@ async function broadcastUpvote(author, permlink) {
         await steem.broadcast.voteAsync(postingKey, 'checky', author, permlink, 10000);
         return;
     } catch(err) {
-        if(log_errors) console.error(`Broadcast error (upvote): ${ err.message } with ${ nodes[0] }`);
+        if(log_errors) console.error(`Broadcast error (vote): ${ err.message } with ${ nodes[0] }`);
         // Putting the node where the error comes from at the end of the array
         nodes.push(nodes.shift());
         steem.api.setOptions({ url: nodes[0] });
@@ -149,6 +149,24 @@ async function getFollowees(account, start = '') {
 }
 
 /**
+ * Gets the best price to buy Steem at on the market
+ * @returns {Promise<number>} The best price to buy Steem at on the market
+ */
+async function getLowestAsk() {
+    try {
+        const { lowest_ask } = await steem.api.getTickerAsync();
+        return parseFloat(lowest_ask);
+    } catch(err) {
+        if(log_errors) console.error(`Broadcast error (getTicker): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await getLowestAsk();
+    }
+}
+
+/**
  * Gets the tags used by `author`
  * @param {string} author The author that used those tags
  * @returns {Promise<string[]>} The tags used by `author`
@@ -233,6 +251,7 @@ module.exports = {
     broadcastComment,
     broadcastDeleteComment,
     broadcastUpvote,
+    getLowestAsk,
     getContent,
     getFollowCircle,
     getTagsByAuthor,
