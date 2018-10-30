@@ -79,7 +79,7 @@ async function correct(username, author, otherMentions, tags) {
     if(!otherMentions.includes(author)) otherMentions.unshift(author);
     // Testing for username variations
     const usernameNoPunct = username.replace(/[\d.-]/g, '');
-    let suggestion = otherMentions.find(mention => {
+    const suggestion = otherMentions.find(mention => {
         const mentionNoPunct = mention.replace(/[\d.-]/g, '');
         return usernameNoPunct === mentionNoPunct || 'the' + usernameNoPunct === mentionNoPunct;
     });
@@ -95,21 +95,16 @@ async function correct(username, author, otherMentions, tags) {
     }
     if(suggestions.length > 0) {
         if(suggestions.length === 1) return '@<em></em>' + highlightDifferences(username, suggestions[0]);
+        const reducer = (mostMentioned, mention) => users[mention].occ > users[mostMentioned].occ ? mention : mostMentioned;
         // Trying to find a suggestion based on the mentions made by the author in the post and, if needed, in his previous posts
-        suggestion = suggestions.reduce((mostMentioned, mention) => {
-            if((otherMentions.includes(mention) || users[author].mentioned.includes(mention)) && users[mention].occ > users[mostMentioned].occ) return mention;
-            return mostMentioned;
-        });
-        if(suggestion) return '@<em></em>' + highlightDifferences(username, suggestion);
+        let filteredSuggestions = suggestions.filter(mention => otherMentions.includes(mention) || users[author].mentioned.includes(mention));
+        if(filteredSuggestions.length > 0) return '@<em></em>' + highlightDifferences(username, filteredSuggestions.reduce(reducer));
         // Trying to find a suggestion based on the followers and followees of the author of the post
         const followCircle = await steemer.getFollowCircle(author);
-        suggestion = suggestions.reduce((mostMentioned, mention) => {
-            if(followCircle.has(mention) && users[mention].occ > users[mostMentioned].occ) return mention;
-            return mostMentioned;
-        });
-        if(suggestion) return '@<em></em>' + highlightDifferences(username, suggestion);
+        filteredSuggestions = suggestions.filter(mention => followCircle.has(mention));
+        if(filteredSuggestions.length > 0) return '@<em></em>' + highlightDifferences(username, filteredSuggestions.reduce(reducer));
         // Suggesting the most mentioned username overall
-        return '@<em></em>' + highlightDifferences(username, suggestions.reduce((mostMentioned, mention) => users[mention].occ > users[mostMentioned].occ ? mention : mostMentioned));
+        return '@<em></em>' + highlightDifferences(username, suggestions.reduce(reducer));
     } else if(await exists('the' + username)) return '@<em></em><strong>the</strong>' + username;
     // Testing for tags written as mentions
     else if(tags.includes(username) || await isTag(author, username, tags)) return '#' + username;
