@@ -68,13 +68,19 @@ async function broadcastUpvote(author, permlink) {
     }
 }
 
-/** Gets the SBD and Steem balances of @checky */
+/** 
+ * Gets the SBD, Steem and reward balances of @checky
+ * @returns {Promise<{sbd: string, sbdReward: string, steem: string, steemReward: string, vestingReward: string}>} The bot's SBD, Steem and reward balances
+ */
 async function getBalances() {
     try {
-        const { balance, sbd_balance } = (await steem.api.getAccountsAsync(['checky']))[0];
+        const { balance, reward_sbd_balance, reward_steem_balance, reward_vesting_balance, sbd_balance } = (await steem.api.getAccountsAsync(['checky']))[0];
         return {
-            sbd: parseFloat(sbd_balance),
-            steem: parseFloat(balance)
+            sbd: sbd_balance,
+            sbdReward: reward_sbd_balance,
+            steem: balance,
+            steemReward: reward_steem_balance,
+            vestingReward: reward_vesting_balance
         };
     } catch(err) {
         if(log_errors) console.error(`Request error (getAccounts): ${ err.message } with ${ nodes[0] }`);
