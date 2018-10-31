@@ -68,6 +68,26 @@ async function broadcastUpvote(author, permlink) {
     }
 }
 
+/**
+ * Broadcasts an operation to claim the reward balances of @checky
+ * @param {string} sbdBalance The SBD reward balance
+ * @param {string} steemBalance The Steem reward balance
+ * @param {string} vestingBalance The vesting shares reward balance
+ */
+async function broadcastClaimRewardBalance(sbdBalance, steemBalance, vestingBalance) {
+    try {
+        await steem.broadcast.claimRewardBalanceAsync(activeKey, 'checky', steemBalance, sbdBalance, vestingBalance);
+        return;
+    } catch(err) {
+        if(log_errors) console.error(`Broadcast error (claimRewardBalance): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await broadcastClaimRewardBalance(sbdBalance, steemBalance, vestingBalance);
+    }
+}
+
 /** 
  * Gets the SBD, Steem and reward balances of @checky
  * @returns {Promise<{sbd: string, sbdReward: string, steem: string, steemReward: string, vestingReward: string}>} The bot's SBD, Steem and reward balances
@@ -272,6 +292,7 @@ function updateNodes(callback) {
 }
 
 module.exports = {
+    broadcastClaimRewardBalance,
     broadcastComment,
     broadcastDeleteComment,
     broadcastUpvote,
