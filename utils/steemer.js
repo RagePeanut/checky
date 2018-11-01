@@ -90,6 +90,24 @@ async function broadcastLimitOrderCreate(sellingSBD, receivingSteem) {
 }
 
 /**
+ * Broadcasts a power up
+ * @param {string} steemAmount The amount of Steem to power up
+ */
+async function broadcastTransferToVesting(steemAmount) {
+    try {
+        await steem.broadcast.transferToVestingAsync(activeKey, 'checky', 'checky', steemAmount);
+        return;
+    } catch(err) {
+        if(log_errors) console.error(`Broadcast error (transferToVesting): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await broadcastTransferToVesting(steemAmount); 
+    }
+}
+
+/**
  * Broadcasts an upvote
  * @param {string} author The author of the post to upvote
  * @param {string} permlink The permlink of the post to upvote
@@ -317,6 +335,7 @@ module.exports = {
     broadcastComment,
     broadcastDeleteComment,
     broadcastLimitOrderCreate,
+    broadcastTransferToVesting,
     broadcastUpvote,
     getBalances,
     getContent,
