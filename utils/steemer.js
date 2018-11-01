@@ -6,6 +6,26 @@ const activeKey = process.env.CHECKY_ACTIVE_KEY;
 let nodes = [fail_safe_node];
 
 /**
+ * Broadcasts an operation to claim the reward balances of @checky
+ * @param {string} sbdBalance The SBD reward balance
+ * @param {string} steemBalance The Steem reward balance
+ * @param {string} vestingBalance The vesting shares reward balance
+ */
+async function broadcastClaimRewardBalance(sbdBalance, steemBalance, vestingBalance) {
+    try {
+        await steem.broadcast.claimRewardBalanceAsync(activeKey, 'checky', steemBalance, sbdBalance, vestingBalance);
+        return;
+    } catch(err) {
+        if(log_errors) console.error(`Broadcast error (claimRewardBalance): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await broadcastClaimRewardBalance(sbdBalance, steemBalance, vestingBalance);
+    }
+}
+
+/**
  * Broadcasts a comment
  * @param {string} parentAuthor The author of the post to reply to
  * @param {string} parentPermlink The permlink of the post to reply to
@@ -49,6 +69,27 @@ async function broadcastDeleteComment(permlink) {
 }
 
 /**
+ * Broadcasts an operation that creates a limit order
+ * @param {string} sellingSBD The amount of SBD to sell
+ * @param {string} receivingSteem The amount of Steem to receive
+ */
+async function broadcastLimitOrderCreate(sellingSBD, receivingSteem) {
+    try {
+        const orderId = Math.random() * 1000000 << 0;
+        const expirationDate = new Date(Date.now() + 10 * 60 * 1000).toISOString().split('.')[0];
+        await steem.broadcast.limitOrderCreateAsync(activeKey, 'checky', orderId, sellingSBD, receivingSteem, false, expirationDate);
+        return;
+    } catch(err) {
+        if(log_errors) console.error(`Broadcast error (limitOrderCreate): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await broadcastLimitOrderCreate(sellingSBD, receivingSteem);  
+    }
+}
+
+/**
  * Broadcasts an upvote
  * @param {string} author The author of the post to upvote
  * @param {string} permlink The permlink of the post to upvote
@@ -65,26 +106,6 @@ async function broadcastUpvote(author, permlink) {
         steem.api.setOptions({ url: nodes[0] });
         if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
         return await broadcastUpvote(author, permlink);
-    }
-}
-
-/**
- * Broadcasts an operation to claim the reward balances of @checky
- * @param {string} sbdBalance The SBD reward balance
- * @param {string} steemBalance The Steem reward balance
- * @param {string} vestingBalance The vesting shares reward balance
- */
-async function broadcastClaimRewardBalance(sbdBalance, steemBalance, vestingBalance) {
-    try {
-        await steem.broadcast.claimRewardBalanceAsync(activeKey, 'checky', steemBalance, sbdBalance, vestingBalance);
-        return;
-    } catch(err) {
-        if(log_errors) console.error(`Broadcast error (claimRewardBalance): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
-        return await broadcastClaimRewardBalance(sbdBalance, steemBalance, vestingBalance);
     }
 }
 
@@ -295,6 +316,7 @@ module.exports = {
     broadcastClaimRewardBalance,
     broadcastComment,
     broadcastDeleteComment,
+    broadcastLimitOrderCreate,
     broadcastUpvote,
     getBalances,
     getContent,
