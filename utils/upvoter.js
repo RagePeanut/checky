@@ -57,7 +57,7 @@ async function upvoteRandomCandidate() {
         const candidate = state.candidates[Math.floor(Math.random() * state.candidates.length)];
         state.candidates = [];
         if(test_environment) console.log('Upvoting', candidate.author, candidate.permlink);
-        else await steemer.broadcastUpvote(candidate.author, candidate.permlink);
+        else await steemer.upvote(candidate.author, candidate.permlink);
         state.last_upvote = new Date().toJSON();
         updateStateFile();
     }

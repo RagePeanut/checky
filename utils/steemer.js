@@ -6,12 +6,12 @@ const activeKey = process.env.CHECKY_ACTIVE_KEY;
 let nodes = [fail_safe_node];
 
 /**
- * Broadcasts an operation to claim the reward balances of @checky
+ * Claims the reward balances of @checky
  * @param {string} sbdBalance The SBD reward balance
  * @param {string} steemBalance The Steem reward balance
  * @param {string} vestingBalance The vesting shares reward balance
  */
-async function broadcastClaimRewardBalance(sbdBalance, steemBalance, vestingBalance) {
+async function claimRewardBalance(sbdBalance, steemBalance, vestingBalance) {
     try {
         await steem.broadcast.claimRewardBalanceAsync(activeKey, 'checky', steemBalance, sbdBalance, vestingBalance);
         return;
@@ -21,7 +21,7 @@ async function broadcastClaimRewardBalance(sbdBalance, steemBalance, vestingBala
         nodes.push(nodes.shift());
         steem.api.setOptions({ url: nodes[0] });
         if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
-        return await broadcastClaimRewardBalance(sbdBalance, steemBalance, vestingBalance);
+        return await claimRewardBalance(sbdBalance, steemBalance, vestingBalance);
     }
 }
 
@@ -34,7 +34,7 @@ async function broadcastClaimRewardBalance(sbdBalance, steemBalance, vestingBala
  * @param {string} jsonMetadata The stringified metadata attached to the comment
  * @returns {Promise<void>} An empty promise resolved after the comment has been broadcasted
  */
-async function broadcastComment(parentAuthor, parentPermlink, title, body, jsonMetadata) {
+async function comment(parentAuthor, parentPermlink, title, body, jsonMetadata) {
     const permlink = 're-' + parentAuthor.replace(/\./g, '') + '-' + parentPermlink;
     try {
         await steem.broadcast.commentAsync(activeKey, parentAuthor, parentPermlink, 'checky', permlink, title, body, jsonMetadata);
@@ -45,16 +45,16 @@ async function broadcastComment(parentAuthor, parentPermlink, title, body, jsonM
         nodes.push(nodes.shift());
         steem.api.setOptions({ url: nodes[0] });
         if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
-        return await broadcastComment(parentAuthor, parentPermlink, title, body, jsonMetadata);
+        return await comment(parentAuthor, parentPermlink, title, body, jsonMetadata);
     }
 }
 
 /**
- * Broadcasts an operation to convert SBD to Steem
+ * Converts SBD to Steem
  * @param {string} sbdAmount The amount of SBD to convert
  * @returns {Promise<void>} An empty promise resolved after the SBD have been converted to Steem
  */
-async function broadcastConvert(sbdAmount) {
+async function convert(sbdAmount) {
     try {
         const requestId = Math.random() * 1000000 << 0;
         await steem.broadcast.convertAsync(activeKey, 'checky', requestId, sbdAmount);
@@ -65,36 +65,17 @@ async function broadcastConvert(sbdAmount) {
         nodes.push(nodes.shift());
         steem.api.setOptions({ url: nodes[0] });
         if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
-        return await broadcastConvert(sbdAmount);
+        return await convert(sbdAmount);
     }
 }
 
 /**
- * Broadcasts an operation to delete a comment
- * @param {string} permlink The permlink of the comment
- * @returns {Promise<void>} An empty promise resolved after the comment has been deleted
- */
-async function broadcastDeleteComment(permlink) {
-    try {
-        await steem.broadcast.deleteCommentAsync(activeKey, 'checky', permlink);
-        return;
-    } catch(err) {
-        if(log_errors) console.error(`Broadcast error (deleteComment): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
-        return await broadcastDeleteComment(permlink);
-    }
-}
-
-/**
- * Broadcasts an operation that creates a limit order
+ * Creates a limit order
  * @param {string} sellingSBD The amount of SBD to sell
  * @param {string} receivingSteem The amount of Steem to receive
  * @returns {Promise<void>} An empty promise resolved after the limit order has been created
  */
-async function broadcastLimitOrderCreate(sellingSBD, receivingSteem) {
+async function createLimitOrder(sellingSBD, receivingSteem) {
     try {
         const orderId = Math.random() * 1000000 << 0;
         const expirationDate = new Date(Date.now() + 10 * 60 * 1000).toISOString().split('.')[0];
@@ -106,46 +87,26 @@ async function broadcastLimitOrderCreate(sellingSBD, receivingSteem) {
         nodes.push(nodes.shift());
         steem.api.setOptions({ url: nodes[0] });
         if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
-        return await broadcastLimitOrderCreate(sellingSBD, receivingSteem);  
+        return await createLimitOrder(sellingSBD, receivingSteem);  
     }
 }
 
 /**
- * Broadcasts a power up
- * @param {string} steemAmount The amount of Steem to power up
- * @returns {Promise<void>} An empty promise resolved after the power up happened
+ * Deletes a comment
+ * @param {string} permlink The permlink of the comment
+ * @returns {Promise<void>} An empty promise resolved after the comment has been deleted
  */
-async function broadcastTransferToVesting(steemAmount) {
+async function deleteComment(permlink) {
     try {
-        await steem.broadcast.transferToVestingAsync(activeKey, 'checky', 'checky', steemAmount);
+        await steem.broadcast.deleteCommentAsync(activeKey, 'checky', permlink);
         return;
     } catch(err) {
-        if(log_errors) console.error(`Broadcast error (transferToVesting): ${ err.message } with ${ nodes[0] }`);
+        if(log_errors) console.error(`Broadcast error (deleteComment): ${ err.message } with ${ nodes[0] }`);
         // Putting the node where the error comes from at the end of the array
         nodes.push(nodes.shift());
         steem.api.setOptions({ url: nodes[0] });
         if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
-        return await broadcastTransferToVesting(steemAmount); 
-    }
-}
-
-/**
- * Broadcasts an upvote
- * @param {string} author The author of the post to upvote
- * @param {string} permlink The permlink of the post to upvote
- * @returns {Promise<void>} An empty promise resolved after the upvote has been broadcasted
- */
-async function broadcastUpvote(author, permlink) {
-    try {
-        await steem.broadcast.voteAsync(activeKey, 'checky', author, permlink, 10000);
-        return;
-    } catch(err) {
-        if(log_errors) console.error(`Broadcast error (vote): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
-        return await broadcastUpvote(author, permlink);
+        return await deleteComment(permlink);
     }
 }
 
@@ -345,10 +306,29 @@ async function lookupAccountNames(usernames) {
     }
 }
 
- /**
-  * Updates the nodes used by the bot
-  * @param {function():string[]} callback The callback that is called when new nodes are received
-  */
+/**
+ * Powers up some Steem
+ * @param {string} steemAmount The amount of Steem to power up
+ * @returns {Promise<void>} An empty promise resolved after the power up happened
+ */
+async function powerUp(steemAmount) {
+    try {
+        await steem.broadcast.transferToVestingAsync(activeKey, 'checky', 'checky', steemAmount);
+        return;
+    } catch(err) {
+        if(log_errors) console.error(`Broadcast error (transferToVesting): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await powerUp(steemAmount); 
+    }
+}
+
+/**
+ * Updates the nodes used by the bot
+ * @param {function():string[]} callback The callback that is called when new nodes are received
+ */
 function updateNodes(callback) {
     steem.api.getAccounts(['fullnodeupdate'], (err, res) => {
         if(err) {
@@ -370,14 +350,32 @@ function updateNodes(callback) {
     });
 }
 
+/**
+ * Broadcasts an upvote
+ * @param {string} author The author of the post to upvote
+ * @param {string} permlink The permlink of the post to upvote
+ * @returns {Promise<void>} An empty promise resolved after the upvote has been broadcasted
+ */
+async function upvote(author, permlink) {
+    try {
+        await steem.broadcast.voteAsync(activeKey, 'checky', author, permlink, 10000);
+        return;
+    } catch(err) {
+        if(log_errors) console.error(`Broadcast error (vote): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await upvote(author, permlink);
+    }
+}
+
 module.exports = {
-    broadcastClaimRewardBalance,
-    broadcastComment,
-    broadcastConvert,
-    broadcastDeleteComment,
-    broadcastLimitOrderCreate,
-    broadcastTransferToVesting,
-    broadcastUpvote,
+    claimRewardBalance,
+    comment,
+    convert,
+    createLimitOrder,
+    deleteComment,
     getBalances,
     getContent,
     getConversionRate,
@@ -386,5 +384,7 @@ module.exports = {
     getTagsByAuthor,
     getTrendingTags,
     lookupAccountNames,
-    updateNodes
+    powerUp,
+    updateNodes,
+    upvote
 }

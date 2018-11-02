@@ -18,13 +18,13 @@ async function checkBalances() {
     const steemRewardFloat = parseFloat(steemReward);
     if(sbdRewardFloat || steemRewardFloat || parseFloat(vestingReward)) {
         if(test_environment) console.log('Claiming reward balances', sbdReward, steemReward, vestingReward);
-        else await steemer.broadcastClaimRewardBalance(sbdReward, steemReward, vestingReward);
+        else await steemer.claimRewardBalance(sbdReward, steemReward, vestingReward);
         sbd = (parseFloat(sbd) + sbdRewardFloat).toFixed(3) + ' SBD';
         steem = (parseFloat(steem) + steemRewardFloat).toFixed(3) + ' STEEM';
     }
     if(parseFloat(steem)) {
         if(test_environment) console.log('Powering up', steem);
-        else steemer.broadcastTransferToVesting(steem);
+        else steemer.powerUp(steem);
     }
     const sbdFloat = parseFloat(sbd);
     if(sbdFloat) {
@@ -32,10 +32,10 @@ async function checkBalances() {
         if(lowestAsk <= conversionRate) {
             const steemNeeded = (sbdFloat / lowestAsk).toFixed(3) + ' STEEM';
             if(test_environment) console.log('Creating limit order', sbd, steemNeeded)
-            else steemer.broadcastLimitOrderCreate(sbd, steemNeeded);
+            else steemer.createLimitOrder(sbd, steemNeeded);
         } else {
             if(test_environment) console.log('Converting', sbd, (sbdFloat / conversionRate).toFixed(3) + ' STEEM');
-            else steemer.broadcastConvert(sbd);
+            else steemer.convert(sbd);
         }
     }
 }

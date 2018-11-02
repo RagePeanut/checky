@@ -426,7 +426,7 @@ async function sendComment(message, author, permlink, title, details, isEdit) {
         ]
     }
     if(test_environment) console.log(author, permlink, '\n', message);
-    else await steemer.broadcastComment(author, permlink, title, message + commentFooter, JSON.stringify(metadata));
+    else await steemer.comment(author, permlink, title, message + commentFooter, JSON.stringify(metadata));
     // Making sure that the 20 seconds delay between comments is respected
     setTimeout(() => {
         commentsInterval = setInterval(prepareComment, 1000)
@@ -487,7 +487,7 @@ function recheckPost(author, permlink) {
 
                     // Deleting the comment if it hasn't been interacted with
                     if(commentContent.net_votes === 0 && commentContent.children === 0) {
-                        await steemer.broadcastDeleteComment(commentPermlink);
+                        await steemer.deleteComment(commentPermlink);
                         delete toRecheck[uri];
                         updateStateFile();
                     // Replacing the comment's content if it can't be deleted
@@ -507,7 +507,7 @@ function recheckPost(author, permlink) {
                 const commentContent = await steemer.getContent('checky', commentPermlink);
                 // Deleting the comment if it hasn't been interacted with
                 if(commentContent.net_votes === 0 && commentContent.children === 0) {
-                    await steemer.broadcastDeleteComment(commentPermlink);
+                    await steemer.deleteComment(commentPermlink);
                 }
             }
             delete toRecheck[uri];
