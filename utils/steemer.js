@@ -1,9 +1,29 @@
 const steem = require('steem');
 const { fail_safe_node, log_errors } = require('../config');
 
-const postingKey = process.env.CHECKY_POSTING_KEY;
+const activeKey = process.env.CHECKY_ACTIVE_KEY;
 
 let nodes = [fail_safe_node];
+
+/**
+ * Broadcasts an operation to claim the reward balances of @checky
+ * @param {string} sbdBalance The SBD reward balance
+ * @param {string} steemBalance The Steem reward balance
+ * @param {string} vestingBalance The vesting shares reward balance
+ */
+async function broadcastClaimRewardBalance(sbdBalance, steemBalance, vestingBalance) {
+    try {
+        await steem.broadcast.claimRewardBalanceAsync(activeKey, 'checky', steemBalance, sbdBalance, vestingBalance);
+        return;
+    } catch(err) {
+        if(log_errors) console.error(`Broadcast error (claimRewardBalance): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await broadcastClaimRewardBalance(sbdBalance, steemBalance, vestingBalance);
+    }
+}
 
 /**
  * Broadcasts a comment
@@ -17,7 +37,7 @@ let nodes = [fail_safe_node];
 async function broadcastComment(parentAuthor, parentPermlink, title, body, jsonMetadata) {
     const permlink = 're-' + parentAuthor.replace(/\./g, '') + '-' + parentPermlink;
     try {
-        await steem.broadcast.commentAsync(postingKey, parentAuthor, parentPermlink, 'checky', permlink, title, body, jsonMetadata);
+        await steem.broadcast.commentAsync(activeKey, parentAuthor, parentPermlink, 'checky', permlink, title, body, jsonMetadata);
         return;
     } catch(err) {
         if(log_errors) console.error(`Broadcast error (comment): ${ err.message } with ${ nodes[0] }`);
@@ -30,13 +50,33 @@ async function broadcastComment(parentAuthor, parentPermlink, title, body, jsonM
 }
 
 /**
+ * Broadcasts an operation to convert SBD to Steem
+ * @param {string} sbdAmount The amount of SBD to convert
+ * @returns {Promise<void>} An empty promise resolved after the SBD have been converted to Steem
+ */
+async function broadcastConvert(sbdAmount) {
+    try {
+        const requestId = Math.random() * 1000000 << 0;
+        await steem.broadcast.convertAsync(activeKey, 'checky', requestId, sbdAmount);
+        return;
+    } catch(err) {
+        if(log_errors) console.error(`Broadcast error (convert): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await broadcastConvert(sbdAmount);
+    }
+}
+
+/**
  * Broadcasts an operation to delete a comment
  * @param {string} permlink The permlink of the comment
  * @returns {Promise<void>} An empty promise resolved after the comment has been deleted
  */
 async function broadcastDeleteComment(permlink) {
     try {
-        await steem.broadcast.deleteCommentAsync(postingKey, 'checky', permlink);
+        await steem.broadcast.deleteCommentAsync(activeKey, 'checky', permlink);
         return;
     } catch(err) {
         if(log_errors) console.error(`Broadcast error (deleteComment): ${ err.message } with ${ nodes[0] }`);
@@ -49,6 +89,47 @@ async function broadcastDeleteComment(permlink) {
 }
 
 /**
+ * Broadcasts an operation that creates a limit order
+ * @param {string} sellingSBD The amount of SBD to sell
+ * @param {string} receivingSteem The amount of Steem to receive
+ * @returns {Promise<void>} An empty promise resolved after the limit order has been created
+ */
+async function broadcastLimitOrderCreate(sellingSBD, receivingSteem) {
+    try {
+        const orderId = Math.random() * 1000000 << 0;
+        const expirationDate = new Date(Date.now() + 10 * 60 * 1000).toISOString().split('.')[0];
+        await steem.broadcast.limitOrderCreateAsync(activeKey, 'checky', orderId, sellingSBD, receivingSteem, false, expirationDate);
+        return;
+    } catch(err) {
+        if(log_errors) console.error(`Broadcast error (limitOrderCreate): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await broadcastLimitOrderCreate(sellingSBD, receivingSteem);  
+    }
+}
+
+/**
+ * Broadcasts a power up
+ * @param {string} steemAmount The amount of Steem to power up
+ * @returns {Promise<void>} An empty promise resolved after the power up happened
+ */
+async function broadcastTransferToVesting(steemAmount) {
+    try {
+        await steem.broadcast.transferToVestingAsync(activeKey, 'checky', 'checky', steemAmount);
+        return;
+    } catch(err) {
+        if(log_errors) console.error(`Broadcast error (transferToVesting): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await broadcastTransferToVesting(steemAmount); 
+    }
+}
+
+/**
  * Broadcasts an upvote
  * @param {string} author The author of the post to upvote
  * @param {string} permlink The permlink of the post to upvote
@@ -56,10 +137,10 @@ async function broadcastDeleteComment(permlink) {
  */
 async function broadcastUpvote(author, permlink) {
     try {
-        await steem.broadcast.voteAsync(postingKey, 'checky', author, permlink, 10000);
+        await steem.broadcast.voteAsync(activeKey, 'checky', author, permlink, 10000);
         return;
     } catch(err) {
-        if(log_errors) console.error(`Broadcast error (upvote): ${ err.message } with ${ nodes[0] }`);
+        if(log_errors) console.error(`Broadcast error (vote): ${ err.message } with ${ nodes[0] }`);
         // Putting the node where the error comes from at the end of the array
         nodes.push(nodes.shift());
         steem.api.setOptions({ url: nodes[0] });
@@ -68,11 +149,35 @@ async function broadcastUpvote(author, permlink) {
     }
 }
 
+/** 
+ * Gets the SBD, Steem and reward balances of @checky
+ * @returns {Promise<{sbd: string, sbdReward: string, steem: string, steemReward: string, vestingReward: string}>} The bot's SBD, Steem and reward balances
+ */
+async function getBalances() {
+    try {
+        const { balance, reward_sbd_balance, reward_steem_balance, reward_vesting_balance, sbd_balance } = (await steem.api.getAccountsAsync(['checky']))[0];
+        return {
+            sbd: sbd_balance,
+            sbdReward: reward_sbd_balance,
+            steem: balance,
+            steemReward: reward_steem_balance,
+            vestingReward: reward_vesting_balance
+        };
+    } catch(err) {
+        if(log_errors) console.error(`Request error (getAccounts): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await getBalances();
+    }
+}
+
 /**
  * Gets the content of a post
  * @param {string} author The author of the post
  * @param {string} permlink The permlink of the post
- * @return {Promise<any>} The content of the post
+ * @returns {Promise<any>} The content of the post
  */
 async function getContent(author, permlink) {
     try {
@@ -85,6 +190,24 @@ async function getContent(author, permlink) {
         steem.api.setOptions({ url: nodes[0] });
         if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
         return await getContent(author, permlink);
+    }
+}
+
+/**
+ * Gets the conversion rate in SBD for 1 Steem
+ * @returns {Promise<number>} The conversion rate
+ */
+async function getConversionRate() {
+    try {
+        const { base, quote } = await steem.api.getCurrentMedianHistoryPriceAsync();
+        return parseFloat(base) / parseFloat(quote);
+    } catch(err) {
+        if(log_errors) console.error(`Request error (getCurrentMedianHistoryPrice): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await getConversionRate();
     }
 }
 
@@ -145,6 +268,24 @@ async function getFollowees(account, start = '') {
         steem.api.setOptions({ url: nodes[0] });
         if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
         return await getFollowees(account, start);
+    }
+}
+
+/**
+ * Gets the best price to buy Steem at on the market
+ * @returns {Promise<number>} The best price to buy Steem at on the market
+ */
+async function getLowestAsk() {
+    try {
+        const { lowest_ask } = await steem.api.getTickerAsync();
+        return parseFloat(lowest_ask);
+    } catch(err) {
+        if(log_errors) console.error(`Broadcast error (getTicker): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await getLowestAsk();
     }
 }
 
@@ -230,11 +371,18 @@ function updateNodes(callback) {
 }
 
 module.exports = {
+    broadcastClaimRewardBalance,
     broadcastComment,
+    broadcastConvert,
     broadcastDeleteComment,
+    broadcastLimitOrderCreate,
+    broadcastTransferToVesting,
     broadcastUpvote,
+    getBalances,
     getContent,
+    getConversionRate,
     getFollowCircle,
+    getLowestAsk,
     getTagsByAuthor,
     getTrendingTags,
     lookupAccountNames,
