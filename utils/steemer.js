@@ -177,7 +177,7 @@ async function getBalances() {
  * Gets the content of a post
  * @param {string} author The author of the post
  * @param {string} permlink The permlink of the post
- * @return {Promise<any>} The content of the post
+ * @returns {Promise<any>} The content of the post
  */
 async function getContent(author, permlink) {
     try {
@@ -190,6 +190,24 @@ async function getContent(author, permlink) {
         steem.api.setOptions({ url: nodes[0] });
         if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
         return await getContent(author, permlink);
+    }
+}
+
+/**
+ * Gets the conversion rate in SBD for 1 Steem
+ * @returns {Promise<number>} The conversion rate
+ */
+async function getConversionRate() {
+    try {
+        const { base, quote } = await steem.api.getCurrentMedianHistoryPriceAsync();
+        return parseFloat(base) / parseFloat(quote);
+    } catch(err) {
+        if(log_errors) console.error(`Request error (getCurrentMedianHistoryPrice): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await getConversionRate();
     }
 }
 
@@ -362,6 +380,7 @@ module.exports = {
     broadcastUpvote,
     getBalances,
     getContent,
+    getConversionRate,
     getFollowCircle,
     getLowestAsk,
     getTagsByAuthor,
