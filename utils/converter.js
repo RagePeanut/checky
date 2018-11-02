@@ -8,7 +8,7 @@ const { test_environment } = require('../config');
  */
 function init(_steemer) {
     steemer = _steemer;
-    setInterval(checkBalances, test_environment ? 5 * 60 * 1000 : 60 * 60 * 1000);
+    setInterval(checkBalances, test_environment ? 10 * 60 * 1000 : 3 * 60 * 60 * 1000);
 }
 
 /** Checks the balances of @checky and powers them up if possible, also tries to buy Steem if any SBD is available. */
@@ -28,10 +28,15 @@ async function checkBalances() {
     }
     const sbdFloat = parseFloat(sbd);
     if(sbdFloat) {
-        const lowestAsk = await steemer.getLowestAsk();
-        const steemNeeded = (sbdFloat / lowestAsk).toFixed(3) + ' STEEM';
-        if(test_environment) console.log('Creating limit order', sbd, steemNeeded)
-        else steemer.broadcastLimitOrderCreate(sbd, steemNeeded);
+        const [lowestAsk, conversionRate] = await Promise.all([steemer.getLowestAsk(), steemer.getConversionRate()]);
+        if(lowestAsk <= conversionRate) {
+            const steemNeeded = (sbdFloat / lowestAsk).toFixed(3) + ' STEEM';
+            if(test_environment) console.log('Creating limit order', sbd, steemNeeded)
+            else steemer.broadcastLimitOrderCreate(sbd, steemNeeded);
+        } else {
+            if(test_environment) console.log('Converting', sbd, (sbdFloat / conversionRate).toFixed(3) + ' STEEM');
+            else steemer.broadcastConvert(sbd);
+        }
     }
 }
 
