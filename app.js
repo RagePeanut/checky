@@ -7,6 +7,8 @@ const checker = require('./utils/checker');
 checker.init(steemer);
 const upvoter = require('./utils/upvoter');
 upvoter.init(steemer);
+const converter = require('./utils/converter');
+converter.init(steemer);
 const { kebabCase, trim, uniqCompact } = require('./utils/helper');
 
 const { fail_safe_node, log_errors, test_environment} = require('./config');
