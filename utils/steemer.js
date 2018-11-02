@@ -50,6 +50,26 @@ async function broadcastComment(parentAuthor, parentPermlink, title, body, jsonM
 }
 
 /**
+ * Broadcasts an operation to convert SBD to Steem
+ * @param {string} sbdAmount The amount of SBD to convert
+ * @returns {Promise<void>} An empty promise resolved after the SBD have been converted to Steem
+ */
+async function broadcastConvert(sbdAmount) {
+    try {
+        const requestId = Math.random() * 1000000 << 0;
+        await steem.broadcast.convertAsync(activeKey, 'checky', requestId, sbdAmount);
+        return;
+    } catch(err) {
+        if(log_errors) console.error(`Broadcast error (convert): ${ err.message } with ${ nodes[0] }`);
+        // Putting the node where the error comes from at the end of the array
+        nodes.push(nodes.shift());
+        steem.api.setOptions({ url: nodes[0] });
+        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        return await broadcastConvert(sbdAmount);
+    }
+}
+
+/**
  * Broadcasts an operation to delete a comment
  * @param {string} permlink The permlink of the comment
  * @returns {Promise<void>} An empty promise resolved after the comment has been deleted
@@ -72,6 +92,7 @@ async function broadcastDeleteComment(permlink) {
  * Broadcasts an operation that creates a limit order
  * @param {string} sellingSBD The amount of SBD to sell
  * @param {string} receivingSteem The amount of Steem to receive
+ * @returns {Promise<void>} An empty promise resolved after the limit order has been created
  */
 async function broadcastLimitOrderCreate(sellingSBD, receivingSteem) {
     try {
@@ -92,6 +113,7 @@ async function broadcastLimitOrderCreate(sellingSBD, receivingSteem) {
 /**
  * Broadcasts a power up
  * @param {string} steemAmount The amount of Steem to power up
+ * @returns {Promise<void>} An empty promise resolved after the power up happened
  */
 async function broadcastTransferToVesting(steemAmount) {
     try {
@@ -333,6 +355,7 @@ function updateNodes(callback) {
 module.exports = {
     broadcastClaimRewardBalance,
     broadcastComment,
+    broadcastConvert,
     broadcastDeleteComment,
     broadcastLimitOrderCreate,
     broadcastTransferToVesting,
