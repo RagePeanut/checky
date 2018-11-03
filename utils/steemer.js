@@ -1,4 +1,5 @@
 const steem = require('steem');
+const { capitalize } = require('./helper');
 const { fail_safe_node, log_errors } = require('../config');
 
 const activeKey = process.env.CHECKY_ACTIVE_KEY;
@@ -16,11 +17,7 @@ async function claimRewardBalance(sbdBalance, steemBalance, vestingBalance) {
         await steem.broadcast.claimRewardBalanceAsync(activeKey, 'checky', steemBalance, sbdBalance, vestingBalance);
         return;
     } catch(err) {
-        if(log_errors) console.error(`Broadcast error (claimRewardBalance): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        handleError(err, 'broadcast', 'claimRewardBalance');
         return await claimRewardBalance(sbdBalance, steemBalance, vestingBalance);
     }
 }
@@ -40,11 +37,7 @@ async function comment(parentAuthor, parentPermlink, title, body, jsonMetadata) 
         await steem.broadcast.commentAsync(activeKey, parentAuthor, parentPermlink, 'checky', permlink, title, body, jsonMetadata);
         return;
     } catch(err) {
-        if(log_errors) console.error(`Broadcast error (comment): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        handleError(err, 'broadcast', 'comment');
         return await comment(parentAuthor, parentPermlink, title, body, jsonMetadata);
     }
 }
@@ -60,11 +53,7 @@ async function convert(sbdAmount) {
         await steem.broadcast.convertAsync(activeKey, 'checky', requestId, sbdAmount);
         return;
     } catch(err) {
-        if(log_errors) console.error(`Broadcast error (convert): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        handleError(err, 'broadcast', 'convert');
         return await convert(sbdAmount);
     }
 }
@@ -82,11 +71,7 @@ async function createLimitOrder(sellingSBD, receivingSteem) {
         await steem.broadcast.limitOrderCreateAsync(activeKey, 'checky', orderId, sellingSBD, receivingSteem, false, expirationDate);
         return;
     } catch(err) {
-        if(log_errors) console.error(`Broadcast error (limitOrderCreate): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        handleError(err, 'broadcast', 'limitOrderCreate');
         return await createLimitOrder(sellingSBD, receivingSteem);  
     }
 }
@@ -101,11 +86,7 @@ async function deleteComment(permlink) {
         await steem.broadcast.deleteCommentAsync(activeKey, 'checky', permlink);
         return;
     } catch(err) {
-        if(log_errors) console.error(`Broadcast error (deleteComment): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        handleError(err, 'broadcast', 'deleteComment');
         return await deleteComment(permlink);
     }
 }
@@ -125,11 +106,7 @@ async function getBalances() {
             vestingReward: reward_vesting_balance
         };
     } catch(err) {
-        if(log_errors) console.error(`Request error (getAccounts): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        handleError(err, 'request', 'getAccounts');
         return await getBalances();
     }
 }
@@ -145,11 +122,7 @@ async function getContent(author, permlink) {
         const content = await steem.api.getContentAsync(author, permlink);
         return content;
     } catch(err) {
-        if(log_errors) console.error(`Request error (getContent): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        handleError(err, 'request', 'getContent');
         return await getContent(author, permlink);
     }
 }
@@ -163,11 +136,7 @@ async function getConversionRate() {
         const { base, quote } = await steem.api.getCurrentMedianHistoryPriceAsync();
         return parseFloat(base) / parseFloat(quote);
     } catch(err) {
-        if(log_errors) console.error(`Request error (getCurrentMedianHistoryPrice): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        handleError(err, 'request', 'getCurrentMedianHistoryPrice');
         return await getConversionRate();
     }
 }
@@ -199,11 +168,7 @@ async function getFollowers(account, start = '') {
             return followers.map(relation => relation.follower).concat(await getFollowers(account, start));
         }
     } catch(err) {
-        if(log_errors) console.error(`Request error (getFollowers): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        handleError(err, 'request', 'getFollowers');
         return await getFollowers(account, start);
     }
 }
@@ -223,11 +188,7 @@ async function getFollowees(account, start = '') {
             return followees.map(relation => relation.following).concat(await getFollowees(account, start));
         }
     } catch(err) {
-        if(log_errors) console.error(`Request error (getFollowing): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        handleError(err, 'request', 'getFollowing');
         return await getFollowees(account, start);
     }
 }
@@ -241,11 +202,7 @@ async function getLowestAsk() {
         const { lowest_ask } = await steem.api.getTickerAsync();
         return parseFloat(lowest_ask);
     } catch(err) {
-        if(log_errors) console.error(`Broadcast error (getTicker): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        handleError(err, 'request', 'getTicker');
         return await getLowestAsk();
     }
 }
@@ -260,11 +217,7 @@ async function getTagsByAuthor(author) {
         const tags = await steem.api.getTagsUsedByAuthorAsync(author);
         return tags.map(tag => tag.name);
     } catch(err) {
-        if(log_errors) console.error(`Request error (getTagsUsedByAuthor): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        handleError(err, 'request', 'getTagsUsedByAuthor');
         return await getTagsByAuthor(author);
     }
 }
@@ -278,13 +231,23 @@ async function getTrendingTags() {
         const tags = await steem.api.getTrendingTagsAsync('', 1000);
         return tags.map(tag => tag.name);
     } catch(err) {
-        if(log_errors) console.error(`Request error (getTrendingTags): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        handleError(err, 'request', 'getTrendingTags');
         return await getTrendingTags();
     }
+}
+
+/** 
+ * Handles an error
+ * @param {any} error The error to handle
+ * @param {string} type The type of interaction with the Steem blockchain that threw the error
+ * @param {string} origin The name of the function that threw the error
+ */
+function handleError(error, type, origin) {
+    if(log_errors) console.error(`${ capitalize(type) } error (${ origin }): ${ error.message } with ${ nodes[0] }`);
+    // Putting the node where the error comes from at the end of the array
+    nodes.push(nodes.shift());
+    steem.api.setOptions({ url: nodes[0] });
+    if(log_errors) console.log(`Retrying with ${ nodes[0] }`);   
 }
 
 /**
@@ -297,11 +260,7 @@ async function lookupAccountNames(usernames) {
         const result = await steem.api.lookupAccountNamesAsync(usernames);
         return result.filter(user => user).map(user => user.name);
     } catch(err) {
-        if(log_errors) console.error(`Request error (lookupAccountNames): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        handleError(err, 'request', 'lookupAccountNames');
         return await lookupAccountNames(usernames);
     }
 }
@@ -316,11 +275,7 @@ async function powerUp(steemAmount) {
         await steem.broadcast.transferToVestingAsync(activeKey, 'checky', 'checky', steemAmount);
         return;
     } catch(err) {
-        if(log_errors) console.error(`Broadcast error (transferToVesting): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        handleError(err, 'broadcast', 'transferToVesting');
         return await powerUp(steemAmount); 
     }
 }
@@ -332,11 +287,7 @@ async function powerUp(steemAmount) {
 function updateNodes(callback) {
     steem.api.getAccounts(['fullnodeupdate'], (err, res) => {
         if(err) {
-            if(log_errors) console.error(`Request error (getAccounts): ${ err.message } with ${ nodes[0] }`);
-            // Putting the node where the error comes from at the end of the array
-            nodes.push(nodes.shift());
-            steem.api.setOptions({ url: nodes[0] });
-            if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+            handleError(err, 'request', 'getAccounts');
             return updateNodes(callback);
         }
         const newNodes = JSON.parse(res[0].json_metadata).nodes.filter(node => !/^wss/.test(node));
@@ -361,11 +312,7 @@ async function upvote(author, permlink) {
         await steem.broadcast.voteAsync(activeKey, 'checky', author, permlink, 10000);
         return;
     } catch(err) {
-        if(log_errors) console.error(`Broadcast error (vote): ${ err.message } with ${ nodes[0] }`);
-        // Putting the node where the error comes from at the end of the array
-        nodes.push(nodes.shift());
-        steem.api.setOptions({ url: nodes[0] });
-        if(log_errors) console.log(`Retrying with ${ nodes[0] }`);
+        handleError(err, 'broadcast', 'vote');
         return await upvote(author, permlink);
     }
 }
