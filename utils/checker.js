@@ -96,8 +96,11 @@ async function correct(username, author, otherMentions, tags) {
     if(suggestions.length > 0) {
         if(suggestions.length === 1) return '@<em></em>' + highlightDifferences(username, suggestions[0]);
         const reducer = (mostMentioned, mention) => users[mention].occ > users[mostMentioned].occ ? mention : mostMentioned;
-        // Trying to find a suggestion based on the mentions made by the author in the post and, if needed, in his previous posts
-        let filteredSuggestions = suggestions.filter(mention => otherMentions.includes(mention) || users[author].mentioned.includes(mention));
+        // Trying to find a suggestion based on the mentions made by the author in the post
+        let filteredSuggestions = suggestions.filter(mention => otherMentions.includes(mention));
+        if(filteredSuggestions.length > 0) return '@<em></em>' + highlightDifferences(username, filteredSuggestions.reduce(reducer));
+        // Trying to find a suggestion based on the mentions made by the author in his previous posts
+        filteredSuggestions = suggestions.filter(mention => users[author].mentioned.includes(mention));
         if(filteredSuggestions.length > 0) return '@<em></em>' + highlightDifferences(username, filteredSuggestions.reduce(reducer));
         // Trying to find a suggestion based on the followers and followees of the author of the post
         const followCircle = await steemer.getFollowCircle(author);
