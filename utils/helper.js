@@ -1,6 +1,15 @@
+/** 
+ * Capitalizes a string 
+ * @param {string} str The string to capitalize
+ * @returns {string} The capitalized string
+ */
+function capitalize(str) {
+    return str && str[0].toUpperCase() + str.slice(1);
+}
+
 /**
  * Merges arrays into one array with unique values
- * @param  {...any[]} arrays The arrays to merge
+ * @param {...any[]} arrays The arrays to merge
  */
 function merge(...arrays) {
     const arr = [];
@@ -35,6 +44,7 @@ function uniqCompact(array) {
 }
 
 module.exports = {
+    capitalize,
     kebabCase: require('lodash.kebabcase'),
     merge,
     trim,
