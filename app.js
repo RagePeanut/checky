@@ -163,7 +163,7 @@ async function findWrongMentions(body, author, tags) {
     const mentionRegex = new RegExp(/(^|[^\w=/#])@([a-z][a-z\d.-]{1,16}[a-z\d])([\w(]|\.[a-z])?/, 'g' + sensitivity + 'mu');
     // All variations of the author username
     const authorRegex = new RegExp(author.replace(/([a-z]+|\d+)/g, '($1)?').replace(/[.-]/g, '[.-]?'));
-    const imageOrDomainRegex = /\.(jpe?g|png|gif|com?|io|org|net|me)$/;
+    const imageOrDomainRegex = /\.(jpe?g|png|gif|com?|io|org|net|me|co\.uk)$/;
     const ignoredMentions = checker.getUser(author).ignored;
     let matches = [];
     while(matches = mentionRegex.exec(body)) {
